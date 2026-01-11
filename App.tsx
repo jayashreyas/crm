@@ -74,6 +74,9 @@ const App: React.FC = () => {
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
+  const [loginEmail, setLoginEmail] = useState('');
+  const [loginLoading, setLoginLoading] = useState(false);
+  const [loginError, setLoginError] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
   // Manual Form States
@@ -670,16 +673,67 @@ const App: React.FC = () => {
             <p className="text-slate-400 font-bold uppercase tracking-widest text-[10px] mt-2">Enterprise Real Estate Operating System</p>
           </div>
           <div className="space-y-3">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Select Workspace Role</p>
-            {MOCK_USERS.map(u => (
-              <button key={u.id} onClick={() => login(u)} className="w-full flex items-center gap-4 p-4 rounded-2xl border-2 border-slate-50 hover:border-indigo-600 hover:bg-indigo-50 transition-all group">
-                <img src={u.avatar} className="w-12 h-12 rounded-xl border-2 border-white shadow-sm" alt="" />
-                <div className="text-left">
-                  <p className="font-black text-slate-800 group-hover:text-indigo-600">{u.name}</p>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">{u.role} • {MOCK_AGENCIES.find(a => a.id === u.agencyId)?.name}</p>
-                </div>
+            <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Workspace Access</p>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setLoginLoading(true);
+              setLoginError('');
+
+              try {
+                // 1. Check if user exists
+                let user = await db.getUserByEmail(loginEmail);
+
+                // 2. If not found, check if it's the master admin email
+                if (!user && loginEmail.toLowerCase() === 'shreyas@rm.com') {
+                  const newUser: User = {
+                    id: `u-${Date.now()}`,
+                    agencyId: 'a1', // Default ID for now
+                    name: 'Shreyas',
+                    email: loginEmail,
+                    role: 'admin',
+                    status: 'Active',
+                    aiUsage: 0,
+                    avatar: `https://ui-avatars.com/api/?name=Shreyas&background=random`
+                  };
+                  await db.saveUser(newUser);
+                  user = newUser;
+                }
+
+                if (user) {
+                  login(user);
+                } else {
+                  setLoginError('Access denied. Please contact your workspace administrator.');
+                }
+              } catch (err) {
+                console.error(err);
+                setLoginError('An error occurred. Please try again.');
+              } finally {
+                setLoginLoading(false);
+              }
+            }} className="space-y-4">
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address</label>
+                <input
+                  required
+                  type="email"
+                  className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                  value={loginEmail}
+                  onChange={e => setLoginEmail(e.target.value)}
+                  placeholder="name@company.com"
+                  disabled={loginLoading}
+                />
+              </div>
+              {loginError && (
+                <p className="text-xs font-bold text-red-500">{loginError}</p>
+              )}
+              <button
+                type="submit"
+                disabled={loginLoading}
+                className="w-full flex items-center justify-center gap-2 py-4 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {loginLoading ? 'Verifying...' : 'Enter Workspace'}
               </button>
-            ))}
+            </form>
           </div>
         </div>
       </div>

@@ -133,6 +133,14 @@ class DBService {
     if (error) console.error("Error deleting user:", error);
   }
 
+  async getUserByEmail(email: string): Promise<User | null> {
+    const { data, error } = await supabase.from('users').select('*').eq('email', email).single();
+    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
+      console.error("Error finding user by email:", error);
+    }
+    return data ? this.mapToUser(data) : null;
+  }
+
   // AI & BILLING
   async consumeCredits(agencyId: string, userId: string, amount: number = 1): Promise<boolean> {
     return true;
