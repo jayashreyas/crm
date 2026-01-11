@@ -9,7 +9,7 @@ import { Offers } from './components/Offers';
 import { Messaging } from './components/Messaging';
 import { AgencyAdmin } from './components/AgencyAdmin';
 import { Tasks } from './components/Tasks';
-import { Contacts } from './components/Contacts'; // Added import
+import { Contacts } from './components/Contacts';
 import { CSVImportModal } from './components/CSVImportModal';
 import { 
   LogOut, 
@@ -51,7 +51,7 @@ import {
   StickyNote
 } from 'lucide-react';
 
-type ImportType = 'contacts' | 'listings' | 'offers';
+type ImportType = 'contacts' | 'listings' | 'offers' | 'tasks';
 
 const App: React.FC = () => {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -295,11 +295,18 @@ const App: React.FC = () => {
     switch (importType) {
       case 'listings':
         return {
-          title: 'Properties',
-          expectedHeaders: ['Address', 'Seller', 'Price'],
+          title: 'Properties & Pipeline',
+          expectedHeaders: ['Address', 'Seller', 'Price', 'Status'],
           onImport: (data: any[]) => {
             if (!currentUser) return;
             data.forEach(item => {
+              // Normalize status for categorization
+              let rawStatus = (item.status || item.stage || 'New').trim().toLowerCase();
+              let finalStatus: ListingStatus = 'New';
+              if (rawStatus.includes('active')) finalStatus = 'Active';
+              else if (rawStatus.includes('contract') || rawStatus.includes('pending')) finalStatus = 'Under Contract';
+              else if (rawStatus.includes('sold') || rawStatus.includes('closed')) finalStatus = 'Sold';
+
               const listing: Listing = {
                 id: `l-${Math.random().toString(36).substr(2, 9)}`,
                 agencyId: currentUser.agencyId,
@@ -307,7 +314,7 @@ const App: React.FC = () => {
                 sellerName: item.seller || item.owner || 'Unknown Seller',
                 price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
                 assignedAgent: currentUser.id,
-                status: 'New',
+                status: finalStatus,
                 createdAt: new Date().toISOString(),
                 metadata: item
               };
@@ -318,7 +325,7 @@ const App: React.FC = () => {
         };
       case 'offers':
         return {
-          title: 'Negotiations',
+          title: 'Offer Negotiations',
           expectedHeaders: ['Buyer', 'Amount', 'Property'],
           onImport: (data: any[]) => {
             if (!currentUser) return;
@@ -344,20 +351,44 @@ const App: React.FC = () => {
             loadData(currentUser);
           }
         };
+      case 'tasks':
+        return {
+          title: 'Agency Productivity Tasks',
+          expectedHeaders: ['Title', 'Due Date', 'Priority'],
+          onImport: (data: any[]) => {
+            if (!currentUser) return;
+            data.forEach(item => {
+              const task: Task = {
+                id: `t-${Math.random().toString(36).substr(2, 9)}`,
+                agencyId: currentUser.agencyId,
+                title: item.title || 'Untitled Task',
+                assignedTo: currentUser.id,
+                dueDate: item['due date'] || new Date().toISOString(),
+                status: 'Pending',
+                priority: (item.priority as any) || 'Medium',
+                createdAt: new Date().toISOString()
+              };
+              db.saveTask(task);
+            });
+            loadData(currentUser);
+          }
+        };
       case 'contacts':
       default:
         return {
-          title: 'CRM Contacts',
+          title: 'CRM Leads & Contacts',
           expectedHeaders: ['Name', 'Email', 'Phone'],
           onImport: (data: any[]) => {
             if (!currentUser) return;
             data.forEach(item => {
+              // Better phone mapping search
+              const phoneVal = item.phone || item.mobile || item.cell || item.number || '';
               const contact: Contact = {
                 id: `c-${Math.random().toString(36).substr(2, 9)}`,
                 agencyId: currentUser.agencyId,
                 name: item.name || 'Unknown',
                 email: item.email || '',
-                phone: item.phone || '',
+                phone: phoneVal,
                 tags: [],
                 notes: '',
                 assignedTo: currentUser.id,
@@ -380,7 +411,7 @@ const App: React.FC = () => {
           contacts={contacts} listings={listings} tasks={tasks} offers={offers} 
           activities={activities} user={currentUser} users={MOCK_USERS} 
         />;
-      case 'contacts': // Replaced placeholder
+      case 'contacts':
         return <Contacts 
           contacts={contacts} users={MOCK_USERS} currentUser={currentUser} 
           onRefresh={() => loadData(currentUser)}
@@ -406,6 +437,7 @@ const App: React.FC = () => {
           tasks={tasks} users={MOCK_USERS} currentUser={currentUser} 
           onRefresh={() => loadData(currentUser)}
           onAddTask={() => setIsCreateTaskModalOpen(true)}
+          onImport={() => handleOpenImport('tasks')}
         />;
       case 'messaging':
         return <Messaging 
@@ -610,7 +642,6 @@ const App: React.FC = () => {
           </div>
         )}
 
-        {/* Other Modals (Task, Offer, Import) - (Existing code logic continues below) */}
         {isCreateTaskModalOpen && (
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
             <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
@@ -843,7 +874,15 @@ const App: React.FC = () => {
           </div>
         )}
 
-        <CSVImportModal isOpen={isImportModalOpen} onClose={() => setIsImportModalOpen(false)} {...getImportConfig()} />
+        {/* Use a unique key for each import type to ensure the modal state is completely destroyed/recreated when switching sections */}
+        {isImportModalOpen && (
+          <CSVImportModal 
+            key={importType}
+            isOpen={isImportModalOpen} 
+            onClose={() => setIsImportModalOpen(false)} 
+            {...getImportConfig()} 
+          />
+        )}
       </main>
     </div>
   );

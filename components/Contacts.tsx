@@ -30,6 +30,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
   const filteredContacts = contacts.filter(c => 
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    c.phone.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.tags.some(t => t.toLowerCase().includes(searchQuery.toLowerCase()))
   );
 
@@ -68,7 +69,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
             <input 
               type="text" 
-              placeholder="Search by name, email, or tag..." 
+              placeholder="Search by name, email, phone or tag..." 
               className="w-full bg-white border border-slate-200 rounded-xl py-2.5 pl-11 pr-4 text-sm font-medium focus:ring-4 focus:ring-indigo-50 outline-none transition-all"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
@@ -84,7 +85,8 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
             <thead className="sticky top-0 z-10 bg-white shadow-sm">
               <tr>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">Lead Entity</th>
-                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">Contact Info</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">Primary Number</th>
+                <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">Email Context</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b">Tags</th>
                 <th className="px-8 py-5 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b text-right">Actions</th>
               </tr>
@@ -92,7 +94,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
             <tbody className="divide-y divide-slate-50">
               {filteredContacts.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-20 text-center text-slate-400 font-medium">
+                  <td colSpan={5} className="py-20 text-center text-slate-400 font-medium">
                     No leads found matching your search.
                   </td>
                 </tr>
@@ -108,20 +110,20 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
                           </div>
                           <div>
                             <p className="font-black text-slate-800 text-sm">{contact.name}</p>
-                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Assigned: {assignee?.name || 'Unassigned'}</p>
+                            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">Specialist: {assignee?.name || 'Unassigned'}</p>
                           </div>
                         </div>
                       </td>
                       <td className="px-8 py-6">
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-600">
-                            <Mail className="w-3.5 h-3.5 text-slate-300" />
-                            {contact.email}
-                          </div>
-                          <div className="flex items-center gap-2 text-xs font-bold text-slate-400">
-                            <Phone className="w-3.5 h-3.5 text-slate-300" />
-                            {contact.phone}
-                          </div>
+                        <div className="flex items-center gap-2 text-sm font-black text-slate-900">
+                          <Phone className="w-3.5 h-3.5 text-indigo-400" />
+                          {contact.phone || <span className="text-slate-300 font-bold italic">Unrecorded</span>}
+                        </div>
+                      </td>
+                      <td className="px-8 py-6">
+                        <div className="flex items-center gap-2 text-xs font-bold text-slate-500">
+                          <Mail className="w-3.5 h-3.5 text-slate-300" />
+                          {contact.email}
                         </div>
                       </td>
                       <td className="px-8 py-6">
@@ -132,7 +134,7 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
                               {tag}
                             </span>
                           ))}
-                          {contact.tags.length === 0 && <span className="text-[10px] text-slate-300 font-medium">No tags</span>}
+                          {contact.tags.length === 0 && <span className="text-[10px] text-slate-300 font-medium italic">General</span>}
                         </div>
                       </td>
                       <td className="px-8 py-6 text-right">
@@ -154,10 +156,10 @@ export const Contacts: React.FC<ContactsProps> = ({ contacts, users, currentUser
         </div>
         
         <div className="p-6 bg-slate-50/50 border-t flex justify-between items-center text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">
-          <span>Showing {filteredContacts.length} of {contacts.length} leads</span>
+          <span>Showing {filteredContacts.length} of {contacts.length} entries</span>
           <div className="flex items-center gap-4">
             <button disabled className="opacity-50 cursor-not-allowed">Previous</button>
-            <button className="text-indigo-600 hover:underline">Next Page</button>
+            <button className="text-indigo-600 hover:underline">Next Data Page</button>
           </div>
         </div>
       </div>

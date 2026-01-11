@@ -1,6 +1,6 @@
 
 import React, { useState, useRef } from 'react';
-import { X, FileUp, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { X, FileUp, CheckCircle, AlertCircle, Loader2, Table } from 'lucide-react';
 
 interface CSVImportModalProps {
   isOpen: boolean;
@@ -19,7 +19,7 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
 
   if (!isOpen) return null;
 
-  // Robust CSV parser that handles quotes and nested commas
+  // Robust CSV parser handles quotes and nested commas
   const parseCSV = (text: string) => {
     const rows: string[][] = [];
     let currentRow: string[] = [];
@@ -55,12 +55,9 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
-      setError("Please upload a valid CSV or Text file.");
-      return;
-    }
-
+    setError(null);
     setIsProcessing(true);
+
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -68,36 +65,57 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
         const parsedRows = parseCSV(content);
         
         if (parsedRows.length < 2) {
-          throw new Error("File is empty or missing data rows.");
+          throw new Error("File appears to be empty or missing data rows.");
         }
 
-        const headers = parsedRows[0].map(h => h.trim().toLowerCase());
+        const headersInFile = parsedRows[0].map(h => h.trim().toLowerCase());
         
-        // Use flexible matching for headers
-        const missing = expectedHeaders.filter(expected => 
-          !headers.some(h => h.includes(expected.toLowerCase()))
-        );
+        // Header Mapping Engine: Standardize keys based on expectations
+        const headerMap: Record<string, number> = {}; 
+        expectedHeaders.forEach(expected => {
+          const colIndex = headersInFile.findIndex(h => h.includes(expected.toLowerCase()));
+          if (colIndex !== -1) {
+            headerMap[expected.toLowerCase()] = colIndex;
+          }
+        });
 
-        if (missing.length > 0 && expectedHeaders.length > 0) {
-          throw new Error(`Missing required columns: ${missing.join(', ')}`);
+        // Validation: Ensure we found at least one matching column if expected
+        if (expectedHeaders.length > 0 && Object.keys(headerMap).length === 0) {
+          throw new Error(`Could not find required columns. Expected something like: ${expectedHeaders.join(', ')}`);
         }
 
         const formattedData = parsedRows.slice(1).map((row) => {
           const obj: any = {};
-          headers.forEach((h, i) => {
-            obj[h] = row[i] || '';
+          // Map expected fields
+          expectedHeaders.forEach(expected => {
+            const index = headerMap[expected.toLowerCase()];
+            if (index !== undefined) {
+              obj[expected.toLowerCase()] = row[index] || '';
+            }
+          });
+          // Also keep original fields for metadata
+          headersInFile.forEach((h, i) => {
+            if (!obj[h]) obj[h] = row[i] || '';
           });
           return obj;
         });
 
-        setData(formattedData.filter(d => Object.values(d).some(v => v !== '')));
+        const validData = formattedData.filter(d => Object.values(d).some(v => v !== ''));
+        if (validData.length === 0) throw new Error("No valid data rows found after processing.");
+
+        setData(validData);
         setStep('preview');
-        setError(null);
       } catch (err: any) {
         setError(err.message || "Failed to parse file.");
       } finally {
         setIsProcessing(false);
+        // Clear input so same file can be selected again if needed
+        if (fileInputRef.current) fileInputRef.current.value = '';
       }
+    };
+    reader.onerror = () => {
+      setError("Failed to read file.");
+      setIsProcessing(false);
     };
     reader.readAsText(file);
   };
@@ -105,42 +123,52 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
   const confirmImport = () => {
     onImport(data);
     onClose();
-    setStep('upload');
-    setData([]);
+    // State will be reset because component unmounts in App.tsx when isOpen is false
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
-        <div className="p-6 border-b flex items-center justify-between bg-slate-50/50">
-          <div>
-            <h3 className="font-black text-xl flex items-center gap-2 text-slate-800 tracking-tight">
-              <FileUp className="w-6 h-6 text-indigo-600" />
-              Import {title}
-            </h3>
-            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Step: {step === 'upload' ? 'Upload File' : 'Data Validation'}</p>
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-[3rem] shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-200 border border-slate-100">
+        <div className="p-8 border-b flex items-center justify-between bg-slate-50/50">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100">
+              <FileUp className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h3 className="text-2xl font-black text-slate-800 tracking-tight">Import {title}</h3>
+              <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-1">
+                {step === 'upload' ? 'Awaiting Protocol Upload' : 'Data Integrity Review'}
+              </p>
+            </div>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
+          <button onClick={onClose} className="p-3 hover:bg-slate-200 rounded-full transition-all text-slate-400">
             <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
           {step === 'upload' ? (
-            <div className="text-center space-y-6">
+            <div className="space-y-8">
               <div 
-                onClick={() => fileInputRef.current?.click()}
-                className="border-4 border-dashed border-slate-100 rounded-[2.5rem] p-16 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all cursor-pointer group relative"
+                onClick={() => !isProcessing && fileInputRef.current?.click()}
+                className={`border-4 border-dashed rounded-[3rem] p-20 transition-all cursor-pointer group relative text-center ${
+                  isProcessing ? 'border-indigo-100 bg-slate-50' : 'border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/30'
+                }`}
               >
                 {isProcessing ? (
-                  <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mx-auto mb-6" />
-                ) : (
-                  <div className="bg-white w-20 h-20 rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
-                    <FileUp className="w-10 h-10 text-indigo-600" />
+                  <div className="flex flex-col items-center">
+                    <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mb-6" />
+                    <p className="text-lg font-black text-slate-800">Processing Stream...</p>
                   </div>
+                ) : (
+                  <>
+                    <div className="bg-white w-20 h-20 rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                      <FileUp className="w-10 h-10 text-indigo-600" />
+                    </div>
+                    <p className="text-xl font-black text-slate-800 tracking-tight">Select CSV Data Source</p>
+                    <p className="text-slate-400 font-medium mt-2 max-w-xs mx-auto text-sm">Upload your {title.toLowerCase()} export. We support multi-column data and flexible headers.</p>
+                  </>
                 )}
-                <p className="text-xl font-black text-slate-800 tracking-tight">Drop your CSV here</p>
-                <p className="text-slate-400 font-medium mt-2 max-w-xs mx-auto">Upload the listing export. We support multi-column property data and quoted fields.</p>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
@@ -149,57 +177,73 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
                   accept=".csv,.txt"
                 />
               </div>
+
+              <div className="bg-slate-50 p-6 rounded-[2rem] border border-slate-100">
+                <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3 flex items-center gap-2">
+                  <Table className="w-3.5 h-3.5" /> Required Column Map
+                </h4>
+                <div className="flex flex-wrap gap-2">
+                  {expectedHeaders.map(h => (
+                    <span key={h} className="px-4 py-1.5 bg-white border border-slate-200 rounded-xl text-[10px] font-black text-slate-600 uppercase tracking-widest shadow-sm">
+                      {h}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
               {error && (
-                <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-sm font-bold flex items-center gap-3 border border-red-100">
-                  <AlertCircle className="w-5 h-5 shrink-0" />
+                <div className="bg-rose-50 text-rose-600 p-6 rounded-[2rem] text-sm font-bold flex items-center gap-4 border border-rose-100 animate-in fade-in slide-in-from-top-2">
+                  <AlertCircle className="w-6 h-6 shrink-0" />
                   {error}
                 </div>
               )}
             </div>
           ) : (
             <div className="space-y-6">
-              <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-3 border border-emerald-100">
-                <CheckCircle className="w-5 h-5" />
-                Found {data.length} valid property records. Reviewing schema map...
+              <div className="bg-emerald-50 text-emerald-700 p-6 rounded-[2rem] text-sm font-bold flex items-center gap-4 border border-emerald-100">
+                <CheckCircle className="w-6 h-6 shrink-0" />
+                Stream Parsed: Found {data.length} valid entries. Review the mapping below.
               </div>
-              <div className="overflow-x-auto border-2 border-slate-50 rounded-2xl">
-                <table className="w-full text-sm">
+              <div className="overflow-hidden border-2 border-slate-50 rounded-[2rem] shadow-sm">
+                <table className="w-full text-left">
                   <thead className="bg-slate-50/80">
                     <tr>
-                      {Object.keys(data[0]).slice(0, 6).map(h => (
-                        <th key={h} className="px-6 py-4 text-left font-black text-slate-400 uppercase tracking-widest text-[10px] border-b">{h}</th>
+                      {Object.keys(data[0]).slice(0, 4).map(h => (
+                        <th key={h} className="px-8 py-5 text-left font-black text-slate-400 uppercase tracking-widest text-[9px] border-b">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-50">
-                    {data.slice(0, 5).map((row, idx) => (
+                    {data.slice(0, 4).map((row, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
-                        {Object.keys(data[0]).slice(0, 6).map(h => (
-                          <td key={h} className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{row[h]}</td>
+                        {Object.keys(data[0]).slice(0, 4).map(h => (
+                          <td key={h} className="px-8 py-5 text-slate-600 font-bold text-xs truncate max-w-[150px]">{row[h]}</td>
                         ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              <p className="text-[10px] text-slate-400 font-black uppercase text-center tracking-widest">Showing top 5 of {data.length} rows</p>
+              <p className="text-[10px] text-slate-400 font-black uppercase text-center tracking-[0.2em] mt-4">Verified {data.length} entries for commit</p>
             </div>
           )}
         </div>
 
-        <div className="p-6 border-t bg-slate-50/50 flex justify-end gap-4">
+        <div className="p-8 border-t bg-slate-50/50 flex justify-end gap-4">
           <button 
+            type="button"
             onClick={onClose} 
-            className="px-8 py-3 text-slate-500 hover:text-slate-800 font-black uppercase tracking-widest text-xs"
+            className="px-8 py-4 text-slate-500 hover:text-slate-800 font-black uppercase tracking-widest text-xs transition-all"
           >
-            Abort
+            Abort Import
           </button>
           {step === 'preview' && (
             <button 
+              type="button"
               onClick={confirmImport}
-              className="px-10 py-3 bg-slate-900 hover:bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all"
+              className="px-12 py-4 bg-slate-900 hover:bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs rounded-2xl shadow-2xl transition-all"
             >
-              Commit {data.length} Records
+              Commit Data Stream
             </button>
           )}
         </div>

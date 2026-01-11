@@ -12,7 +12,8 @@ import {
   AlertCircle,
   CheckSquare,
   Filter,
-  MoreVertical
+  MoreVertical,
+  FileUp
 } from 'lucide-react';
 import { db } from '../services/db.service';
 
@@ -22,9 +23,9 @@ interface TasksProps {
   currentUser: User;
   onRefresh: () => void;
   onAddTask: () => void;
+  onImport: () => void; // Added onImport
 }
 
-// Helper to determine priority color coding
 const getPriorityColor = (priority: TaskPriority) => {
   switch (priority) {
     case 'High': return 'text-rose-600 bg-rose-50 border-rose-100';
@@ -34,7 +35,6 @@ const getPriorityColor = (priority: TaskPriority) => {
   }
 };
 
-// Defined interface for TaskCard props to properly handle types
 interface TaskCardProps {
   task: Task;
   users: User[];
@@ -42,7 +42,6 @@ interface TaskCardProps {
   onDelete: (id: string) => void;
 }
 
-// Used React.FC to handle intrinsic attributes like 'key' correctly in JSX lists
 const TaskCard: React.FC<TaskCardProps> = ({ 
   task, 
   users, 
@@ -93,7 +92,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
   );
 };
 
-export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefresh, onAddTask }) => {
+export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefresh, onAddTask, onImport }) => {
   const myTasks = tasks.filter(t => t.assignedTo === currentUser.id);
   const teamTasks = tasks.filter(t => t.assignedTo !== currentUser.id);
 
@@ -120,8 +119,13 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button className="px-5 py-2.5 border border-slate-200 bg-white text-slate-500 font-bold rounded-xl hover:bg-slate-50 transition-all text-xs flex items-center gap-2">
-            <Filter className="w-4 h-4" /> Filter
+          <button 
+            type="button" 
+            onClick={onImport}
+            className="flex items-center gap-2 px-6 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs"
+          >
+            <FileUp className="w-4 h-4 text-slate-400" />
+            Import CSV
           </button>
           <button 
             onClick={onAddTask}
@@ -133,7 +137,6 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
-        {/* MY TASKS SECTION */}
         <div className="space-y-6">
           <div className="flex items-center justify-between px-2">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">My Daily Focus</h3>
@@ -158,7 +161,6 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
           </div>
         </div>
 
-        {/* TEAM TASKS SECTION */}
         <div className="space-y-6">
           <div className="flex items-center justify-between px-2">
             <h3 className="text-xs font-black text-slate-400 uppercase tracking-[0.2em]">Team Oversight</h3>
