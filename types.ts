@@ -7,6 +7,8 @@ export interface Agency {
   name: string;
   plan: AgencyPlan;
   logo?: string;
+  aiCredits: number;
+  aiLimits: number;
 }
 
 export interface User {
@@ -17,6 +19,7 @@ export interface User {
   role: UserRole;
   avatar?: string;
   status: 'Active' | 'Inactive';
+  aiUsage: number;
 }
 
 export interface Contact {
@@ -29,9 +32,18 @@ export interface Contact {
   notes: string;
   assignedTo: string;
   createdAt: string;
+  metadata?: Record<string, string>;
 }
 
 export type ListingStatus = 'New' | 'Active' | 'Under Contract' | 'Sold';
+
+export interface AIScore {
+  score: number;
+  explanation: string;
+  risks: string[];
+  urgency: 'Low' | 'Medium' | 'High';
+  lastUpdated: string;
+}
 
 export interface Listing {
   id: string;
@@ -42,9 +54,13 @@ export interface Listing {
   assignedAgent: string;
   status: ListingStatus;
   createdAt: string;
+  notes?: string;
+  aiScore?: AIScore;
+  metadata?: Record<string, string>;
 }
 
-export type OfferStatus = 'Received' | 'Counter' | 'Accepted' | 'Rejected';
+// Updated Status for the requested Negotiation Pipeline
+export type OfferStatus = 'Draft' | 'Offer Sent' | 'In Talks' | 'Offer Accepted' | 'Offer Declined';
 
 export interface Offer {
   id: string;
@@ -52,11 +68,16 @@ export interface Offer {
   listingId: string;
   buyerName: string;
   price: number;
+  downPayment: number;
+  earnestMoney: number;
   financing: 'Cash' | 'Conventional' | 'FHA' | 'VA';
+  inspectionPeriod: number; // Days
+  contingencies: string[];
   closingDate: string;
   status: OfferStatus;
   assignedTo: string;
   createdAt: string;
+  aiSummary?: string;
 }
 
 export type TaskStatus = 'Pending' | 'Done';
@@ -100,7 +121,7 @@ export interface Activity {
   userId: string;
   action: string;
   target: string;
-  type: 'event' | 'audit';
+  type: 'event' | 'audit' | 'ai';
   timestamp: string;
 }
 

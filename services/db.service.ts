@@ -1,5 +1,5 @@
 
-import { Contact, Listing, Task, User, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus } from '../types';
+import { Contact, Listing, Task, User, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus, AIScore } from '../types';
 
 const STORAGE_KEYS = {
   CONTACTS: 'ep_contacts',
@@ -8,7 +8,8 @@ const STORAGE_KEYS = {
   OFFERS: 'ep_offers',
   THREADS: 'ep_threads',
   ACTIVITY: 'ep_activity',
-  NOTIFS: 'ep_notifs'
+  NOTIFS: 'ep_notifs',
+  AGENCY_DATA: 'ep_agencies'
 };
 
 class DBService {
@@ -21,8 +22,24 @@ class DBService {
     localStorage.setItem(key, JSON.stringify(data));
   }
 
+  // AI BILLING & CREDITS
+  consumeCredits(agencyId: string, userId: string, amount: number = 1): boolean {
+    const agencies = this.get<any>(STORAGE_KEYS.AGENCY_DATA);
+    const agency = agencies.find((a: any) => a.id === agencyId);
+    if (agency && agency.aiCredits >= amount) {
+      agency.aiCredits -= amount;
+      this.set(STORAGE_KEYS.AGENCY_DATA, agencies);
+      
+      // Update User usage too
+      // This is a bit complex in localstorage without indexing, but for MVP:
+      this.logActivity(agencyId, userId, `consumed ${amount} AI credits`, 'AI Engine', 'ai');
+      return true;
+    }
+    return false;
+  }
+
   // ACTIVITY
-  logActivity(agencyId: string, userId: string, action: string, target: string, type: 'event' | 'audit' = 'event'): void {
+  logActivity(agencyId: string, userId: string, action: string, target: string, type: 'event' | 'audit' | 'ai' = 'event'): void {
     const all = this.get<Activity>(STORAGE_KEYS.ACTIVITY);
     all.unshift({
       id: `act-${Date.now()}`,
@@ -81,6 +98,23 @@ class DBService {
     return all.filter(l => l.assignedAgent === userId);
   }
 
+  saveListing(listing: Listing): void {
+    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
+    const index = all.findIndex(l => l.id === listing.id);
+    if (index > -1) all[index] = listing;
+    else all.push(listing);
+    this.set(STORAGE_KEYS.LISTINGS, all);
+  }
+
+  updateListingScore(id: string, score: AIScore): void {
+    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
+    const item = all.find(l => l.id === id);
+    if (item) {
+      item.aiScore = score;
+      this.set(STORAGE_KEYS.LISTINGS, all);
+    }
+  }
+
   updateListingStatus(id: string, agencyId: string, status: ListingStatus, userId: string): void {
     const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
     const item = all.find(l => l.id === id && l.agencyId === agencyId);
@@ -98,6 +132,15 @@ class DBService {
     const all = this.get<Offer>(STORAGE_KEYS.OFFERS).filter(o => o.agencyId === agencyId);
     if (role === 'admin') return all;
     return all.filter(o => o.assignedTo === userId);
+  }
+
+  updateOfferSummary(id: string, summary: string): void {
+    const all = this.get<Offer>(STORAGE_KEYS.OFFERS);
+    const item = all.find(o => o.id === id);
+    if (item) {
+      item.aiSummary = summary;
+      this.set(STORAGE_KEYS.OFFERS, all);
+    }
   }
 
   saveOffer(offer: Offer, userId: string): void {
@@ -153,10 +196,17 @@ class DBService {
     const agency1 = users.filter(u => u.agencyId === 'a1');
     const agency2 = users.filter(u => u.agencyId === 'a2');
 
+    if (!localStorage.getItem(STORAGE_KEYS.AGENCY_DATA)) {
+      this.set(STORAGE_KEYS.AGENCY_DATA, [
+        { id: 'a1', name: 'Elite Realty Group', plan: 'Enterprise', aiCredits: 1000, aiLimits: 5000 },
+        { id: 'a2', name: 'Summit Properties', plan: 'Pro', aiCredits: 500, aiLimits: 2000 }
+      ]);
+    }
+
     if (this.get(STORAGE_KEYS.LISTINGS).length === 0) {
       this.set(STORAGE_KEYS.LISTINGS, [
-        { id: 'l1', agencyId: 'a1', address: '123 Oak St, Springfield', sellerName: 'Robert Paulson', price: 450000, assignedAgent: agency1[1].id, status: 'Active', createdAt: new Date().toISOString() },
-        { id: 'l2', agencyId: 'a1', address: '456 Maple Ave, Springfield', sellerName: 'Alice Green', price: 620000, assignedAgent: agency1[2].id, status: 'New', createdAt: new Date().toISOString() },
+        { id: 'l1', agencyId: 'a1', address: '123 Oak St, Springfield', sellerName: 'Robert Paulson', price: 450000, assignedAgent: agency1[1].id, status: 'Active', createdAt: new Date().toISOString(), notes: "Seller is motivated but fixed on price. House in good condition." },
+        { id: 'l2', agencyId: 'a1', address: '456 Maple Ave, Springfield', sellerName: 'Alice Green', price: 620000, assignedAgent: agency1[2].id, status: 'New', createdAt: new Date().toISOString(), notes: "Luxury listing, slow market currently." },
         { id: 'l3', agencyId: 'a2', address: '999 Peak View, Ridge', sellerName: 'Victor Summit', price: 2100000, assignedAgent: agency2[1].id, status: 'Active', createdAt: new Date().toISOString() }
       ]);
     }

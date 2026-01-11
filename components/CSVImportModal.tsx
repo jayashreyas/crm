@@ -19,12 +19,44 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
 
   if (!isOpen) return null;
 
+  // Robust CSV parser that handles quotes and nested commas
+  const parseCSV = (text: string) => {
+    const rows: string[][] = [];
+    let currentRow: string[] = [];
+    let currentField = '';
+    let inQuotes = false;
+    
+    for (let i = 0; i < text.length; i++) {
+      const char = text[i];
+      if (char === '"') {
+        inQuotes = !inQuotes;
+      } else if (char === ',' && !inQuotes) {
+        currentRow.push(currentField.trim());
+        currentField = '';
+      } else if ((char === '\n' || char === '\r') && !inQuotes) {
+        if (currentField || currentRow.length > 0) {
+          currentRow.push(currentField.trim());
+          rows.push(currentRow);
+          currentRow = [];
+          currentField = '';
+        }
+      } else {
+        currentField += char;
+      }
+    }
+    if (currentField || currentRow.length > 0) {
+      currentRow.push(currentField.trim());
+      rows.push(currentRow);
+    }
+    return rows;
+  };
+
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    if (!file.name.endsWith('.csv')) {
-      setError("Please upload a valid CSV file.");
+    if (!file.name.endsWith('.csv') && !file.name.endsWith('.txt')) {
+      setError("Please upload a valid CSV or Text file.");
       return;
     }
 
@@ -33,32 +65,36 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
     reader.onload = (event) => {
       try {
         const content = event.target?.result as string;
-        const lines = content.split('\n').filter(line => line.trim());
-        if (lines.length < 2) {
-          throw new Error("CSV is empty or missing data rows.");
+        const parsedRows = parseCSV(content);
+        
+        if (parsedRows.length < 2) {
+          throw new Error("File is empty or missing data rows.");
         }
 
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase());
-        const missing = expectedHeaders.filter(eh => !headers.includes(eh.toLowerCase()));
+        const headers = parsedRows[0].map(h => h.trim().toLowerCase());
+        
+        // Use flexible matching for headers
+        const missing = expectedHeaders.filter(expected => 
+          !headers.some(h => h.includes(expected.toLowerCase()))
+        );
 
-        if (missing.length > 0) {
+        if (missing.length > 0 && expectedHeaders.length > 0) {
           throw new Error(`Missing required columns: ${missing.join(', ')}`);
         }
 
-        const rows = lines.slice(1).map((line, idx) => {
-          const values = line.split(',');
+        const formattedData = parsedRows.slice(1).map((row) => {
           const obj: any = {};
           headers.forEach((h, i) => {
-            obj[h] = values[i]?.trim();
+            obj[h] = row[i] || '';
           });
           return obj;
         });
 
-        setData(rows);
+        setData(formattedData.filter(d => Object.values(d).some(v => v !== '')));
         setStep('preview');
         setError(null);
       } catch (err: any) {
-        setError(err.message || "Failed to parse CSV file.");
+        setError(err.message || "Failed to parse file.");
       } finally {
         setIsProcessing(false);
       }
@@ -75,89 +111,95 @@ export const CSVImportModal: React.FC<CSVImportModalProps> = ({ isOpen, onClose,
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden flex flex-col max-h-[90vh]">
-        <div className="p-4 border-b flex items-center justify-between bg-slate-50">
-          <h3 className="font-semibold text-lg flex items-center gap-2">
-            <FileUp className="w-5 h-5 text-indigo-600" />
-            Import {title}
-          </h3>
-          <button onClick={onClose} className="p-1 hover:bg-slate-200 rounded-full transition-colors">
-            <X className="w-5 h-5" />
+      <div className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b flex items-center justify-between bg-slate-50/50">
+          <div>
+            <h3 className="font-black text-xl flex items-center gap-2 text-slate-800 tracking-tight">
+              <FileUp className="w-6 h-6 text-indigo-600" />
+              Import {title}
+            </h3>
+            <p className="text-xs text-slate-400 font-bold uppercase tracking-widest mt-1">Step: {step === 'upload' ? 'Upload File' : 'Data Validation'}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-slate-200 rounded-full transition-colors text-slate-400">
+            <X className="w-6 h-6" />
           </button>
         </div>
 
-        <div className="p-6 flex-1 overflow-y-auto custom-scrollbar">
+        <div className="p-8 flex-1 overflow-y-auto custom-scrollbar">
           {step === 'upload' ? (
-            <div className="text-center space-y-4">
+            <div className="text-center space-y-6">
               <div 
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-slate-300 rounded-lg p-12 hover:border-indigo-400 hover:bg-indigo-50 transition-all cursor-pointer group"
+                className="border-4 border-dashed border-slate-100 rounded-[2.5rem] p-16 hover:border-indigo-200 hover:bg-indigo-50/30 transition-all cursor-pointer group relative"
               >
                 {isProcessing ? (
-                  <Loader2 className="w-12 h-12 text-indigo-500 animate-spin mx-auto mb-4" />
+                  <Loader2 className="w-16 h-16 text-indigo-500 animate-spin mx-auto mb-6" />
                 ) : (
-                  <FileUp className="w-12 h-12 text-slate-400 group-hover:text-indigo-500 mx-auto mb-4" />
+                  <div className="bg-white w-20 h-20 rounded-3xl shadow-xl flex items-center justify-center mx-auto mb-6 group-hover:scale-110 transition-transform">
+                    <FileUp className="w-10 h-10 text-indigo-600" />
+                  </div>
                 )}
-                <p className="text-slate-600 font-medium">Click to upload or drag and drop</p>
-                <p className="text-slate-400 text-sm">CSV files only. Must include: {expectedHeaders.join(', ')}</p>
+                <p className="text-xl font-black text-slate-800 tracking-tight">Drop your CSV here</p>
+                <p className="text-slate-400 font-medium mt-2 max-w-xs mx-auto">Upload the listing export. We support multi-column property data and quoted fields.</p>
                 <input 
                   type="file" 
                   ref={fileInputRef} 
                   onChange={handleFileUpload} 
                   className="hidden" 
-                  accept=".csv"
+                  accept=".csv,.txt"
                 />
               </div>
               {error && (
-                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4" />
+                <div className="bg-red-50 text-red-600 p-4 rounded-2xl text-sm font-bold flex items-center gap-3 border border-red-100">
+                  <AlertCircle className="w-5 h-5 shrink-0" />
                   {error}
                 </div>
               )}
             </div>
           ) : (
-            <div className="space-y-4">
-              <div className="bg-green-50 text-green-700 p-3 rounded-lg text-sm flex items-center gap-2">
-                <CheckCircle className="w-4 h-4" />
-                Validated {data.length} rows. Previewing the first 5 records.
+            <div className="space-y-6">
+              <div className="bg-emerald-50 text-emerald-700 p-4 rounded-2xl text-sm font-bold flex items-center gap-3 border border-emerald-100">
+                <CheckCircle className="w-5 h-5" />
+                Found {data.length} valid property records. Reviewing schema map...
               </div>
-              <div className="overflow-x-auto border rounded-lg">
+              <div className="overflow-x-auto border-2 border-slate-50 rounded-2xl">
                 <table className="w-full text-sm">
-                  <thead className="bg-slate-50">
+                  <thead className="bg-slate-50/80">
                     <tr>
-                      {expectedHeaders.map(h => (
-                        <th key={h} className="px-4 py-2 text-left font-medium text-slate-500 border-b capitalize">{h}</th>
+                      {Object.keys(data[0]).slice(0, 6).map(h => (
+                        <th key={h} className="px-6 py-4 text-left font-black text-slate-400 uppercase tracking-widest text-[10px] border-b">{h}</th>
                       ))}
                     </tr>
                   </thead>
-                  <tbody>
+                  <tbody className="divide-y divide-slate-50">
                     {data.slice(0, 5).map((row, idx) => (
-                      <tr key={idx} className="border-b last:border-0">
-                        {expectedHeaders.map(h => (
-                          <td key={h} className="px-4 py-2 text-slate-600 whitespace-nowrap">{row[h.toLowerCase()]}</td>
+                      <tr key={idx} className="hover:bg-slate-50/50 transition-colors">
+                        {Object.keys(data[0]).slice(0, 6).map(h => (
+                          <td key={h} className="px-6 py-4 text-slate-600 font-medium whitespace-nowrap overflow-hidden text-ellipsis max-w-[150px]">{row[h]}</td>
                         ))}
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
+              <p className="text-[10px] text-slate-400 font-black uppercase text-center tracking-widest">Showing top 5 of {data.length} rows</p>
             </div>
           )}
         </div>
 
-        <div className="p-4 border-t bg-slate-50 flex justify-end gap-3">
+        <div className="p-6 border-t bg-slate-50/50 flex justify-end gap-4">
           <button 
             onClick={onClose} 
-            className="px-4 py-2 text-slate-600 hover:text-slate-800 font-medium"
+            className="px-8 py-3 text-slate-500 hover:text-slate-800 font-black uppercase tracking-widest text-xs"
           >
-            Cancel
+            Abort
           </button>
           {step === 'preview' && (
             <button 
               onClick={confirmImport}
-              className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-lg shadow-sm transition-all"
+              className="px-10 py-3 bg-slate-900 hover:bg-indigo-600 text-white font-black uppercase tracking-widest text-xs rounded-2xl shadow-xl transition-all"
             >
-              Import Data
+              Commit {data.length} Records
             </button>
           )}
         </div>
