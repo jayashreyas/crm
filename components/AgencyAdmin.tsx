@@ -7,36 +7,55 @@ interface AgencyAdminProps {
   agency: Agency;
   users: User[];
   activities: Activity[];
-  onAddUser?: (user: User) => void;
+  onSaveUser?: (user: User) => void;
   onDeleteUser?: (id: string) => void;
 }
 
-export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activities, onAddUser, onDeleteUser }) => {
+export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activities, onSaveUser, onDeleteUser }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [newUser, setNewUser] = useState({ name: '', email: '', role: 'agent' as UserRole });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [formData, setFormData] = useState({ name: '', email: '', role: 'agent' as UserRole });
 
   const filteredUsers = users.filter(u => u.name.toLowerCase().includes(searchTerm.toLowerCase()));
   const auditLogs = activities.filter(a => a.type === 'audit' || a.action.includes('status'));
 
-  const handleCreateUser = (e: React.FormEvent) => {
+  const handleSaveUser = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!onAddUser) return;
+    if (!onSaveUser) return;
 
-    // Simple ID gen for now, Supabase usually handles this but we need optimistic UI or proper flow
-    const user: User = {
+    const user: User = editingUser ? {
+      ...editingUser,
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
+    } : {
       id: `u-${Date.now()}`,
       agencyId: agency.id,
-      name: newUser.name,
-      email: newUser.email,
-      role: newUser.role,
+      name: formData.name,
+      email: formData.email,
+      role: formData.role,
       status: 'Active',
       aiUsage: 0,
-      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(newUser.name)}&background=random`
+      avatar: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=random`
     };
-    onAddUser(user);
-    setIsAddModalOpen(false);
-    setNewUser({ name: '', email: '', role: 'agent' });
+
+    onSaveUser(user);
+    setIsModalOpen(false);
+    setEditingUser(null);
+    setFormData({ name: '', email: '', role: 'agent' });
+  };
+
+  const openAddModal = () => {
+    setEditingUser(null);
+    setFormData({ name: '', email: '', role: 'agent' });
+    setIsModalOpen(true);
+  };
+
+  const openEditModal = (user: User) => {
+    setEditingUser(user);
+    setFormData({ name: user.name, email: user.email, role: user.role });
+    setIsModalOpen(true);
   };
 
   return (
@@ -47,7 +66,7 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
           <p className="text-slate-500 font-medium">Controlling workspace access and audit trails for {agency.name}.</p>
         </div>
         <button
-          onClick={() => setIsAddModalOpen(true)}
+          onClick={openAddModal}
           className="flex items-center gap-2 px-6 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all">
           <UserPlus className="w-5 h-5" /> Invite Member
         </button>
@@ -105,6 +124,13 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
                       </td>
                       <td className="px-6 py-4 text-right">
                         <button
+                          onClick={() => openEditModal(u)}
+                          className="p-2 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-300 transition-colors mr-1"
+                          title="Edit User"
+                        >
+                          <Edit2 className="w-5 h-5" />
+                        </button>
+                        <button
                           onClick={() => {
                             if (confirm('Are you sure you want to remove this user?')) {
                               onDeleteUser?.(u.id);
@@ -158,22 +184,22 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
         </div>
       </div>
 
-      {/* ADD MEMBER MODAL */}
-      {isAddModalOpen && (
+      {/* USER MODAL */}
+      {isModalOpen && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
             <div className="px-8 py-6 border-b flex items-center justify-between bg-slate-50/50">
-              <h3 className="font-black text-xl text-slate-900">Invite Team Member</h3>
-              <button onClick={() => setIsAddModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
+              <h3 className="font-black text-xl text-slate-900">{editingUser ? 'Edit Team Member' : 'Invite Team Member'}</h3>
+              <button onClick={() => setIsModalOpen(false)} className="p-2 hover:bg-slate-200 rounded-full text-slate-400"><X className="w-5 h-5" /></button>
             </div>
-            <form onSubmit={handleCreateUser} className="p-8 space-y-5">
+            <form onSubmit={handleSaveUser} className="p-8 space-y-5">
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Name</label>
                 <input
                   required
                   className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-100 outline-none font-bold text-sm"
-                  value={newUser.name}
-                  onChange={e => setNewUser({ ...newUser, name: e.target.value })}
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Sarah Agent"
                 />
               </div>
@@ -183,8 +209,8 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
                   required
                   type="email"
                   className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-100 outline-none font-bold text-sm"
-                  value={newUser.email}
-                  onChange={e => setNewUser({ ...newUser, email: e.target.value })}
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
                   placeholder="sarah@agency.com"
                 />
               </div>
@@ -192,8 +218,8 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
                 <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Role</label>
                 <select
                   className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:ring-2 focus:ring-indigo-100 outline-none font-bold text-sm"
-                  value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value as UserRole })}
+                  value={formData.role}
+                  onChange={(e) => setFormData({ ...formData, role: e.target.value as UserRole })}
                 >
                   <option value="agent">Agent</option>
                   <option value="admin">Admin</option>
@@ -201,7 +227,7 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
                 </select>
               </div>
               <button type="submit" className="w-full py-4 bg-indigo-600 text-white font-black rounded-xl hover:bg-indigo-700 shadow-lg shadow-indigo-100 transition-all mt-4">
-                Send Invitation
+                {editingUser ? 'Save Changes' : 'Send Invitation'}
               </button>
             </form>
           </div>

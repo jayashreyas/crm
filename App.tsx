@@ -73,7 +73,6 @@ const App: React.FC = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
-  const [notifs, setNotifs] = useState<Notification[]>([]);
   const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -174,7 +173,7 @@ const App: React.FC = () => {
     localStorage.removeItem('ep_current_user');
   };
 
-  const handleSaveManualContact = (e: React.FormEvent) => {
+  const handleSaveManualContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !newContact.name) return;
 
@@ -187,17 +186,18 @@ const App: React.FC = () => {
       tags: newContact.tags.split(',').map(t => t.trim()).filter(t => t !== ''),
       notes: newContact.notes,
       assignedTo: currentUser.id,
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      metadata: {}
     };
 
-    db.saveContact(contact);
-    db.logActivity(currentUser.agencyId, currentUser.id, 'captured new lead:', contact.name);
+    await db.saveContact(contact);
+    await db.logActivity(currentUser.agencyId, currentUser.id, 'captured new lead:', contact.name);
     setIsCreateContactModalOpen(false);
     setNewContact({ name: '', email: '', phone: '', tags: '', notes: '' });
     loadData(currentUser);
   };
 
-  const handleSaveManualListing = (e: React.FormEvent) => {
+  const handleSaveManualListing = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !newListing.address) return;
 
@@ -209,11 +209,13 @@ const App: React.FC = () => {
       price: parseFloat(newListing.price.replace(/[^0-9.]/g, '')) || 0,
       assignedAgent: newListing.assignedAgent || currentUser.id,
       status: 'New',
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      notes: '',
+      metadata: {}
     };
 
-    db.saveListing(listing);
-    db.logActivity(currentUser.agencyId, currentUser.id, 'added new property to pipeline', listing.address);
+    await db.saveListing(listing);
+    await db.logActivity(currentUser.agencyId, currentUser.id, 'added new property to pipeline', listing.address);
     setIsCreateListingModalOpen(false);
     setNewListing({ address: '', sellerName: '', price: '', assignedAgent: '' });
     loadData(currentUser);
@@ -221,7 +223,7 @@ const App: React.FC = () => {
 
 
 
-  const handleSaveManualTask = (e: React.FormEvent) => {
+  const handleSaveManualTask = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !newTask.title) return;
 
@@ -236,14 +238,14 @@ const App: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
-    db.saveTask(task);
-    db.logActivity(currentUser.agencyId, currentUser.id, 'scheduled a new task:', task.title);
+    await db.saveTask(task);
+    await db.logActivity(currentUser.agencyId, currentUser.id, 'scheduled a new task:', task.title);
     setIsCreateTaskModalOpen(false);
-    setNewTask({ title: '', assignedTo: '', dueDate: new Date().toISOString().split('T')[0], priority: 'Medium' });
+    setNewTask({ title: '', assignedTo: '', dueDate: new Date().toISOString().split('T')[0], priority: 'Medium' as any });
     loadData(currentUser);
   };
 
-  const handleSaveManualOffer = (e: React.FormEvent) => {
+  const handleSaveManualOffer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentUser || !newOffer.buyerName) return;
 
@@ -259,9 +261,10 @@ const App: React.FC = () => {
         assignedAgent: currentUser.id,
         status: 'Active',
         createdAt: new Date().toISOString(),
-        notes: 'Target asset for Buyer Representation.'
+        notes: 'Target asset for Buyer Representation.',
+        metadata: {}
       };
-      db.saveListing(shellListing);
+      await db.saveListing(shellListing);
       finalListingId = shellListing.id;
     }
 
@@ -287,8 +290,8 @@ const App: React.FC = () => {
       createdAt: new Date().toISOString()
     };
 
-    db.saveOffer(offer, currentUser.id);
-    db.logActivity(currentUser.agencyId, currentUser.id, 'finalized offer sheet for buyer', offer.buyerName);
+    await db.saveOffer(offer, currentUser.id);
+    await db.logActivity(currentUser.agencyId, currentUser.id, 'finalized offer sheet for buyer', offer.buyerName);
     setIsCreateOfferModalOpen(false);
 
     setNewOffer({
@@ -323,9 +326,9 @@ const App: React.FC = () => {
     loadData(currentUser);
   };
 
-  const handleUpdateOffer = (id: string, status: OfferStatus) => {
+  const handleUpdateOffer = async (id: string, status: OfferStatus) => {
     if (!currentUser) return;
-    const allOffers = db.getOffers(currentUser.agencyId, 'admin', '');
+    const allOffers = await db.getOffers(currentUser.agencyId, 'admin', '');
     const offer = allOffers.find(o => o.id === id);
     if (offer) {
       offer.status = status;
@@ -647,7 +650,7 @@ const App: React.FC = () => {
           agency={currentAgency!}
           users={users}
           activities={activities}
-          onAddUser={async (u) => { await db.saveUser(u); loadData(currentUser); }}
+          onSaveUser={async (u) => { await db.saveUser(u); loadData(currentUser); }}
           onDeleteUser={async (id) => { await db.deleteUser(id); loadData(currentUser); }}
         />;
       default:
