@@ -470,7 +470,7 @@ const App: React.FC = () => {
               }
 
               const listing: Listing = {
-                id: `l-${Math.random().toString(36).substr(2, 9)}`,
+                id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
                 address: item.address || item.property || item.site || item.location || 'Unknown Address',
                 sellerName: item.seller || item.owner || item.vendor || item.client || 'Unknown Seller',
@@ -495,7 +495,7 @@ const App: React.FC = () => {
             if (!currentUser) return;
             data.forEach(item => {
               const offer: Offer = {
-                id: `off-${Math.random().toString(36).substr(2, 9)}`,
+                id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
                 listingId: '',
                 buyerName: item.buyer || 'Unknown Buyer',
