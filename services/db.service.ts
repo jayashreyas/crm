@@ -110,7 +110,7 @@ class DBService {
       email: u.email,
       role: u.role,
       avatar: u.avatar,
-      status: u.status,
+      // status: u.status, // Removed - column doesn't exist in Supabase
       // ai_usage: u.aiUsage // Optional: Add if column exists
     };
   }
