@@ -166,7 +166,7 @@ const App: React.FC = () => {
   const login = (u: User) => {
     setCurrentUser(u);
     localStorage.setItem('ep_current_user', JSON.stringify(u));
-    db.seed(MOCK_USERS);
+    localStorage.setItem('ep_current_user', JSON.stringify(u));
     loadData(u);
   };
 
@@ -655,6 +655,13 @@ const App: React.FC = () => {
           activities={activities}
           onSaveUser={async (u) => { await db.saveUser(u); loadData(currentUser); }}
           onDeleteUser={async (id) => { await db.deleteUser(id); loadData(currentUser); }}
+          onResetTeam={async () => {
+            if (!currentUser) return;
+            // Delete everyone except current user
+            const toDelete = users.filter(u => u.id !== currentUser.id).map(u => u.id);
+            await Promise.all(toDelete.map(id => db.deleteUser(id)));
+            loadData(currentUser);
+          }}
         />;
       default:
         return <div>Section Coming Soon</div>;
