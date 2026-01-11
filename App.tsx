@@ -106,24 +106,11 @@ const App: React.FC = () => {
 
   // ... (existing state)
 
-  const loadData = async (user: User) => {
+  const loadData = useCallback(async (user: User) => {
     setLoading(true);
     try {
       const contactsData = await db.getContacts(user.agencyId, user.role, user.id);
       setContacts(contactsData);
-      // ... (rest of loadData)
-
-      const handleUpdateOffer = async (id: string, status: OfferStatus) => {
-        if (!currentUser) return;
-        const allOffers = await db.getOffers(currentUser.agencyId, 'admin', '');
-        const offer = allOffers.find(o => o.id === id);
-        if (offer) {
-          offer.status = status;
-          await db.saveOffer(offer, currentUser.id);
-          await db.logActivity(currentUser.agencyId, currentUser.id, `marked offer for ${offer.buyerName} as`, status);
-          loadData(currentUser);
-        }
-      };
 
       const listingsData = await db.getListings(user.agencyId, user.role, user.id);
       setListings(listingsData);
@@ -150,7 +137,7 @@ const App: React.FC = () => {
     const agenciesStr = localStorage.getItem('ep_agencies');
     const agencies = agenciesStr ? JSON.parse(agenciesStr) : MOCK_AGENCIES;
     setCurrentAgency(agencies.find((a: any) => a.id === user.agencyId) || null);
-  };
+  }, []);
 
   useEffect(() => {
     const saved = localStorage.getItem('ep_current_user');
