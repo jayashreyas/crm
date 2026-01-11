@@ -1,14 +1,14 @@
 
 import React from 'react';
 import { Task, User, TaskStatus, TaskPriority } from '../types';
-import { 
-  CheckCircle2, 
-  Circle, 
-  Clock, 
-  Calendar, 
-  User as UserIcon, 
-  Plus, 
-  Trash2, 
+import {
+  CheckCircle2,
+  Circle,
+  Clock,
+  Calendar,
+  User as UserIcon,
+  Plus,
+  Trash2,
   AlertCircle,
   CheckSquare,
   Filter,
@@ -42,24 +42,24 @@ interface TaskCardProps {
   onDelete: (id: string) => void;
 }
 
-const TaskCard: React.FC<TaskCardProps> = ({ 
-  task, 
-  users, 
-  onToggle, 
-  onDelete 
+const TaskCard: React.FC<TaskCardProps> = ({
+  task,
+  users,
+  onToggle,
+  onDelete
 }) => {
   const isDone = task.status === 'Done';
   const assignee = users.find(u => u.id === task.assignedTo);
-  
+
   return (
     <div className={`group flex items-start gap-4 p-5 bg-white rounded-2xl border transition-all ${isDone ? 'opacity-60 grayscale-[0.5]' : 'hover:border-indigo-300 shadow-sm hover:shadow-md'}`}>
-      <button 
+      <button
         onClick={() => onToggle(task.id)}
         className={`shrink-0 mt-0.5 transition-colors ${isDone ? 'text-emerald-500' : 'text-slate-300 hover:text-indigo-500'}`}
       >
         {isDone ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
       </button>
-      
+
       <div className="flex-1 min-w-0">
         <div className="flex items-start justify-between gap-2">
           <h4 className={`text-sm font-bold truncate transition-all ${isDone ? 'line-through text-slate-400' : 'text-slate-800'}`}>
@@ -69,7 +69,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
             {task.priority}
           </span>
         </div>
-        
+
         <div className="flex items-center gap-4 mt-3">
           <div className="flex items-center gap-1.5 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
             <Calendar className="w-3.5 h-3.5" />
@@ -82,7 +82,7 @@ const TaskCard: React.FC<TaskCardProps> = ({
         </div>
       </div>
 
-      <button 
+      <button
         onClick={() => onDelete(task.id)}
         className="p-2 text-slate-300 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all"
       >
@@ -96,15 +96,16 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
   const myTasks = tasks.filter(t => t.assignedTo === currentUser.id);
   const teamTasks = tasks.filter(t => t.assignedTo !== currentUser.id);
 
-  const handleToggle = (id: string) => {
-    db.toggleTaskStatus(id, currentUser.agencyId);
-    onRefresh();
+  const handleToggle = async (id: string) => {
+    const task = myTasks.find(t => t.id === id) || teamTasks.find(t => t.id === id);
+    if (task) {
+      await db.toggleTaskStatus(task, currentUser.agencyId);
+      onRefresh();
+    }
   };
 
-  const handleDelete = (id: string) => {
-    const all = JSON.parse(localStorage.getItem('ep_tasks') || '[]');
-    const filtered = all.filter((t: any) => t.id !== id);
-    localStorage.setItem('ep_tasks', JSON.stringify(filtered));
+  const handleDelete = async (id: string) => {
+    await db.deleteTasks([id]);
     onRefresh();
   };
 
@@ -119,15 +120,15 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
           </p>
         </div>
         <div className="flex items-center gap-3">
-          <button 
-            type="button" 
+          <button
+            type="button"
             onClick={onImport}
             className="flex items-center gap-2 px-6 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs"
           >
             <FileUp className="w-4 h-4 text-slate-400" />
             Import CSV
           </button>
-          <button 
+          <button
             onClick={onAddTask}
             className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-xs uppercase tracking-widest"
           >
@@ -149,12 +150,12 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
               </div>
             ) : (
               myTasks.map(task => (
-                <TaskCard 
-                  key={task.id} 
-                  task={task} 
-                  users={users} 
-                  onToggle={handleToggle} 
-                  onDelete={handleDelete} 
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  users={users}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
                 />
               ))
             )}
@@ -167,18 +168,18 @@ export const Tasks: React.FC<TasksProps> = ({ tasks, users, currentUser, onRefre
             <span className="text-[10px] font-black text-slate-400 bg-slate-100 px-2.5 py-1 rounded-full">{teamTasks.length} assigned</span>
           </div>
           <div className="space-y-3">
-             {teamTasks.length === 0 ? (
+            {teamTasks.length === 0 ? (
               <div className="p-12 text-center bg-slate-50/50 rounded-[2rem] border-2 border-dashed border-slate-100">
                 <p className="text-slate-400 font-medium text-sm">No team tasks have been initialized yet.</p>
               </div>
             ) : (
               teamTasks.map(task => (
-                <TaskCard 
-                  key={task.id} 
-                  task={task} 
-                  users={users} 
-                  onToggle={handleToggle} 
-                  onDelete={handleDelete} 
+                <TaskCard
+                  key={task.id}
+                  task={task}
+                  users={users}
+                  onToggle={handleToggle}
+                  onDelete={handleDelete}
                 />
               ))
             )}

@@ -1,18 +1,18 @@
 
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Users, 
-  Layers, 
-  HandCoins, 
-  CheckSquare, 
+import {
+  LayoutDashboard,
+  Users,
+  Layers,
+  HandCoins,
+  CheckSquare,
   MessageSquare,
   ShieldCheck,
-  Settings 
+  Settings
 } from 'lucide-react';
 import { AppView, User, Agency } from './types';
 
-export const APP_NAME = "EstatePulse";
+export const APP_NAME = "RM TEAM CRM";
 
 export const MOCK_AGENCIES: Agency[] = [
   // Added required aiCredits and aiLimits for Enterprise and Pro plans to resolve TypeScript errors

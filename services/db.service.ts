@@ -1,221 +1,246 @@
-
 import { Contact, Listing, Task, User, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus, AIScore } from '../types';
-
-const STORAGE_KEYS = {
-  CONTACTS: 'ep_contacts',
-  LISTINGS: 'ep_listings',
-  TASKS: 'ep_tasks',
-  OFFERS: 'ep_offers',
-  THREADS: 'ep_threads',
-  ACTIVITY: 'ep_activity',
-  NOTIFS: 'ep_notifs',
-  AGENCY_DATA: 'ep_agencies'
-};
+import { supabase } from './supabaseClient';
 
 class DBService {
-  private get<T>(key: string): T[] {
-    const data = localStorage.getItem(key);
-    return data ? JSON.parse(data) : [];
+
+  // --- MAPPERS (Snake Case <-> Camel Case) ---
+
+  private mapToContact(row: any): Contact {
+    return {
+      id: row.id,
+      agencyId: row.agency_id,
+      name: row.name,
+      phone: row.phone,
+      email: row.email,
+      tags: row.tags || [],
+      notes: row.notes,
+      assignedTo: row.assigned_to,
+      createdAt: row.created_at,
+      metadata: row.metadata || {}
+    };
   }
 
-  private set<T>(key: string, data: T[]): void {
-    localStorage.setItem(key, JSON.stringify(data));
+  private mapFromContact(c: Contact): any {
+    return {
+      id: c.id,
+      agency_id: c.agencyId,
+      name: c.name,
+      phone: c.phone,
+      email: c.email,
+      tags: c.tags,
+      notes: c.notes,
+      assigned_to: c.assignedTo,
+      created_at: c.createdAt,
+      metadata: c.metadata
+    };
   }
 
-  // AI BILLING & CREDITS
-  consumeCredits(agencyId: string, userId: string, amount: number = 1): boolean {
-    const agencies = this.get<any>(STORAGE_KEYS.AGENCY_DATA);
-    const agency = agencies.find((a: any) => a.id === agencyId);
-    if (agency && agency.aiCredits >= amount) {
-      agency.aiCredits -= amount;
-      this.set(STORAGE_KEYS.AGENCY_DATA, agencies);
-      
-      // Update User usage too
-      // This is a bit complex in localstorage without indexing, but for MVP:
-      this.logActivity(agencyId, userId, `consumed ${amount} AI credits`, 'AI Engine', 'ai');
-      return true;
-    }
-    return false;
+  private mapToListing(row: any): Listing {
+    return {
+      id: row.id,
+      agencyId: row.agency_id,
+      address: row.address,
+      sellerName: row.seller_name,
+      price: row.price,
+      assignedAgent: row.assigned_agent,
+      status: row.status as ListingStatus,
+      createdAt: row.created_at,
+      notes: row.notes,
+      metadata: row.metadata || {}
+    };
+  }
+
+  private mapFromListing(l: Listing): any {
+    return {
+      id: l.id,
+      agency_id: l.agencyId,
+      address: l.address,
+      seller_name: l.sellerName,
+      price: l.price,
+      assigned_agent: l.assignedAgent,
+      status: l.status,
+      created_at: l.createdAt,
+      notes: l.notes,
+      metadata: l.metadata
+    };
+  }
+
+  private mapToOffer(row: any): Offer {
+    return {
+      id: row.id,
+      listingId: row.listing_id,
+      buyerName: row.buyer_name,
+      amount: row.amount,
+      status: row.status as OfferStatus,
+      // date: row.date, // Removed as it's not in Offer type
+      // Map other fields as needed if they exist in DB
+      agencyId: 'admin', // default for now
+      price: row.amount, // alias
+      downPayment: 0,
+      earnestMoney: 0,
+      financing: 'Cash',
+      inspectionPeriod: 0,
+      contingencies: [],
+      closingDate: '',
+      assignedTo: '',
+      createdAt: row.created_at
+    } as Offer;
+  }
+
+  // AI & BILLING
+  async consumeCredits(agencyId: string, userId: string, amount: number = 1): Promise<boolean> {
+    return true;
   }
 
   // ACTIVITY
-  logActivity(agencyId: string, userId: string, action: string, target: string, type: 'event' | 'audit' | 'ai' = 'event'): void {
-    const all = this.get<Activity>(STORAGE_KEYS.ACTIVITY);
-    all.unshift({
+  async logActivity(agencyId: string, userId: string, action: string, target: string, type: 'event' | 'audit' | 'ai' = 'event'): Promise<void> {
+    await supabase.from('activities').insert({
       id: `act-${Date.now()}`,
-      agencyId,
-      userId,
+      agency_id: agencyId,
+      user_id: userId,
       action,
       target,
       type,
       timestamp: new Date().toISOString()
     });
-    this.set(STORAGE_KEYS.ACTIVITY, all.slice(0, 200));
   }
 
-  getActivity(agencyId: string): Activity[] {
-    return this.get<Activity>(STORAGE_KEYS.ACTIVITY).filter(a => a.agencyId === agencyId);
+  async getActivity(agencyId: string): Promise<Activity[]> {
+    const { data } = await supabase.from('activities').select('*').eq('agency_id', agencyId).order('timestamp', { ascending: false }).limit(50);
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      agencyId: row.agency_id,
+      userId: row.user_id,
+      action: row.action,
+      target: row.target,
+      type: row.type,
+      timestamp: row.timestamp
+    }));
   }
 
-  // NOTIFICATIONS
-  getNotifications(agencyId: string, userId: string): Notification[] {
-    return this.get<Notification>(STORAGE_KEYS.NOTIFS).filter(n => n.agencyId === agencyId && n.userId === userId);
+  // NOTIFICATIONS 
+  async getNotifications(agencyId: string, userId: string): Promise<Notification[]> {
+    return [];
   }
+  async pushNotification(agencyId: string, userId: string, title: string, message: string): Promise<void> { }
 
-  pushNotification(agencyId: string, userId: string, title: string, message: string): void {
-    const all = this.get<Notification>(STORAGE_KEYS.NOTIFS);
-    all.unshift({
-      id: `nt-${Date.now()}`,
-      agencyId,
-      userId,
-      title,
-      message,
-      read: false,
-      timestamp: new Date().toISOString()
-    });
-    this.set(STORAGE_KEYS.NOTIFS, all.slice(0, 100));
-  }
-
-  // CONTACTS (SaaS Scoped)
-  getContacts(agencyId: string, role: string, userId: string): Contact[] {
-    const all = this.get<Contact>(STORAGE_KEYS.CONTACTS).filter(c => c.agencyId === agencyId);
-    if (role === 'admin') return all;
-    return all.filter(c => c.assignedTo === userId);
-  }
-
-  saveContact(contact: Contact): void {
-    const all = this.get<Contact>(STORAGE_KEYS.CONTACTS);
-    const index = all.findIndex(c => c.id === contact.id);
-    if (index > -1) all[index] = contact;
-    else all.push(contact);
-    this.set(STORAGE_KEYS.CONTACTS, all);
-  }
-
-  // LISTINGS (SaaS Scoped)
-  getListings(agencyId: string, role: string, userId: string): Listing[] {
-    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS).filter(l => l.agencyId === agencyId);
-    if (role === 'admin') return all;
-    return all.filter(l => l.assignedAgent === userId);
-  }
-
-  saveListing(listing: Listing): void {
-    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
-    const index = all.findIndex(l => l.id === listing.id);
-    if (index > -1) all[index] = listing;
-    else all.push(listing);
-    this.set(STORAGE_KEYS.LISTINGS, all);
-  }
-
-  updateListingScore(id: string, score: AIScore): void {
-    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
-    const item = all.find(l => l.id === id);
-    if (item) {
-      item.aiScore = score;
-      this.set(STORAGE_KEYS.LISTINGS, all);
+  // CONTACTS
+  async getContacts(agencyId: string, role: string, userId: string): Promise<Contact[]> {
+    let query = supabase.from('contacts').select('*').eq('agency_id', agencyId);
+    if (role !== 'admin') {
+      query = query.eq('assigned_to', userId);
     }
+    const { data, error } = await query;
+    if (error) console.error(error);
+    return (data || []).map(this.mapToContact);
   }
 
-  updateListingStatus(id: string, agencyId: string, status: ListingStatus, userId: string): void {
-    const all = this.get<Listing>(STORAGE_KEYS.LISTINGS);
-    const item = all.find(l => l.id === id && l.agencyId === agencyId);
-    if (item) {
-      const oldStatus = item.status;
-      item.status = status;
-      this.set(STORAGE_KEYS.LISTINGS, all);
-      this.logActivity(agencyId, userId, `changed listing status from ${oldStatus} to ${status}`, item.address);
-      this.pushNotification(agencyId, item.assignedAgent, 'Listing Update', `The status for ${item.address} is now ${status}`);
-    }
+  async saveContact(contact: Contact): Promise<void> {
+    const row = this.mapFromContact(contact);
+    const { error } = await supabase.from('contacts').upsert(row);
+    if (error) console.error(error);
   }
 
-  // OFFERS (SaaS Scoped)
-  getOffers(agencyId: string, role: string, userId: string): Offer[] {
-    const all = this.get<Offer>(STORAGE_KEYS.OFFERS).filter(o => o.agencyId === agencyId);
-    if (role === 'admin') return all;
-    return all.filter(o => o.assignedTo === userId);
+  async deleteContacts(ids: string[]): Promise<void> {
+    await supabase.from('contacts').delete().in('id', ids);
   }
 
-  updateOfferSummary(id: string, summary: string): void {
-    const all = this.get<Offer>(STORAGE_KEYS.OFFERS);
-    const item = all.find(o => o.id === id);
-    if (item) {
-      item.aiSummary = summary;
-      this.set(STORAGE_KEYS.OFFERS, all);
-    }
+  // LISTINGS
+  async getListings(agencyId: string, role: string, userId: string): Promise<Listing[]> {
+    const { data, error } = await supabase.from('listings').select('*').eq('agency_id', agencyId);
+    if (error) console.error(error);
+    return (data || []).map(this.mapToListing);
   }
 
-  saveOffer(offer: Offer, userId: string): void {
-    const all = this.get<Offer>(STORAGE_KEYS.OFFERS);
-    const index = all.findIndex(o => o.id === offer.id);
-    if (index > -1) {
-      all[index] = offer;
-    } else {
-      all.push(offer);
-      this.logActivity(offer.agencyId, userId, 'received new offer for', offer.buyerName);
-    }
-    this.set(STORAGE_KEYS.OFFERS, all);
+  async saveListing(listing: Listing): Promise<void> {
+    const row = this.mapFromListing(listing);
+    const { error } = await supabase.from('listings').upsert(row);
+    if (error) console.error(error);
   }
 
-  // MESSAGING (SaaS Scoped)
-  getThreads(agencyId: string): Thread[] {
-    return this.get<Thread>(STORAGE_KEYS.THREADS).filter(t => t.agencyId === agencyId);
+  async deleteListings(ids: string[]): Promise<void> {
+    await supabase.from('listings').delete().in('id', ids);
   }
 
-  saveThread(thread: Thread): void {
-    const all = this.get<Thread>(STORAGE_KEYS.THREADS);
-    const index = all.findIndex(t => t.id === thread.id);
-    if (index > -1) all[index] = thread;
-    else all.push(thread);
-    this.set(STORAGE_KEYS.THREADS, all);
+  async updateListingStatus(id: string, agencyId: string, status: ListingStatus, userId: string): Promise<void> {
+    await supabase.from('listings').update({ status }).eq('id', id);
   }
 
-  // TASKS (SaaS Scoped)
-  getTasks(agencyId: string, role: string, userId: string): Task[] {
-    const all = this.get<Task>(STORAGE_KEYS.TASKS).filter(t => t.agencyId === agencyId);
-    if (role === 'admin') return all;
-    return all.filter(t => t.assignedTo === userId);
+  async updateListingScore(id: string, score: AIScore): Promise<void> {
+    // Need metadata or score column
   }
 
-  saveTask(task: Task): void {
-    const all = this.get<Task>(STORAGE_KEYS.TASKS);
-    const index = all.findIndex(t => t.id === task.id);
-    if (index > -1) all[index] = task;
-    else all.push(task);
-    this.set(STORAGE_KEYS.TASKS, all);
+  // OFFERS
+  async getOffers(agencyId: string, role: string, userId: string): Promise<Offer[]> {
+    const { data } = await supabase.from('offers').select('*');
+    return (data || []).map(this.mapToOffer);
   }
 
-  toggleTaskStatus(id: string, agencyId: string): void {
-    const all = this.get<Task>(STORAGE_KEYS.TASKS);
-    const task = all.find(t => t.id === id && t.agencyId === agencyId);
-    if (task) {
-      task.status = task.status === 'Pending' ? 'Done' : 'Pending';
-      this.set(STORAGE_KEYS.TASKS, all);
-    }
+  async saveOffer(offer: Offer, userId: string): Promise<void> {
+    const row = {
+      id: offer.id,
+      listing_id: offer.listingId,
+      buyer_name: offer.buyerName,
+      amount: offer.price,
+      status: offer.status,
+      // date: offer.date, // Removed
+      created_at: offer.createdAt
+    };
+    await supabase.from('offers').upsert(row);
   }
 
-  seed(users: User[]) {
-    const agency1 = users.filter(u => u.agencyId === 'a1');
-    const agency2 = users.filter(u => u.agencyId === 'a2');
+  async updateOfferSummary(id: string, summary: string): Promise<void> {
+    // no-op for now
+  }
 
-    if (!localStorage.getItem(STORAGE_KEYS.AGENCY_DATA)) {
-      this.set(STORAGE_KEYS.AGENCY_DATA, [
-        { id: 'a1', name: 'Elite Realty Group', plan: 'Enterprise', aiCredits: 1000, aiLimits: 5000 },
-        { id: 'a2', name: 'Summit Properties', plan: 'Pro', aiCredits: 500, aiLimits: 2000 }
-      ]);
-    }
+  // TASKS
+  async getTasks(agencyId: string, role: string, userId: string): Promise<Task[]> {
+    const { data } = await supabase.from('tasks').select('*').eq('agency_id', agencyId);
+    return (data || []).map((row: any) => ({
+      id: row.id,
+      agencyId: row.agency_id,
+      title: row.title,
+      assignedTo: row.assigned_to,
+      dueDate: row.due_date,
+      status: row.status,
+      priority: row.priority || 'Medium',
+      createdAt: row.created_at
+    }));
+  }
 
-    if (this.get(STORAGE_KEYS.LISTINGS).length === 0) {
-      this.set(STORAGE_KEYS.LISTINGS, [
-        { id: 'l1', agencyId: 'a1', address: '123 Oak St, Springfield', sellerName: 'Robert Paulson', price: 450000, assignedAgent: agency1[1].id, status: 'Active', createdAt: new Date().toISOString(), notes: "Seller is motivated but fixed on price. House in good condition." },
-        { id: 'l2', agencyId: 'a1', address: '456 Maple Ave, Springfield', sellerName: 'Alice Green', price: 620000, assignedAgent: agency1[2].id, status: 'New', createdAt: new Date().toISOString(), notes: "Luxury listing, slow market currently." },
-        { id: 'l3', agencyId: 'a2', address: '999 Peak View, Ridge', sellerName: 'Victor Summit', price: 2100000, assignedAgent: agency2[1].id, status: 'Active', createdAt: new Date().toISOString() }
-      ]);
-    }
-    if (this.get(STORAGE_KEYS.THREADS).length === 0) {
-      this.set(STORAGE_KEYS.THREADS, [
-        { id: 'gen-a1', agencyId: 'a1', title: 'Elite HQ', type: 'general', messages: [{ id: 'm1', senderId: agency1[0].id, text: 'Elite Realty Channel active.', timestamp: new Date().toISOString() }] },
-        { id: 'gen-a2', agencyId: 'a2', title: 'Summit Lounge', type: 'general', messages: [{ id: 'm2', senderId: agency2[0].id, text: 'Summit properties comms up.', timestamp: new Date().toISOString() }] }
-      ]);
-    }
+  async saveTask(task: Task): Promise<void> {
+    const row = {
+      id: task.id,
+      agency_id: task.agencyId,
+      title: task.title,
+      assigned_to: task.assignedTo,
+      due_date: task.dueDate,
+      status: task.status,
+      priority: task.priority,
+      created_at: task.createdAt
+    };
+    await supabase.from('tasks').upsert(row);
+  }
+
+  async deleteTasks(ids: string[]): Promise<void> {
+    await supabase.from('tasks').delete().in('id', ids);
+  }
+
+  async toggleTaskStatus(task: Task, agencyId: string): Promise<void> {
+    // We accept Task object now to know current status
+    const newStatus = task.status === 'Pending' ? 'Done' : 'Pending';
+    await supabase.from('tasks').update({ status: newStatus }).eq('id', task.id);
+  }
+
+  // THREADS
+  async getThreads(agencyId: string): Promise<Thread[]> {
+    return [];
+  }
+  async saveThread(thread: Thread): Promise<void> { }
+
+  // SEED
+  async seed(users: User[]): Promise<void> {
+    // No-op for cloud
   }
 }
 

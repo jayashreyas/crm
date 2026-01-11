@@ -11,9 +11,9 @@ import { AgencyAdmin } from './components/AgencyAdmin';
 import { Tasks } from './components/Tasks';
 import { Contacts } from './components/Contacts';
 import { CSVImportModal } from './components/CSVImportModal';
-import { 
-  LogOut, 
-  Search, 
+import {
+  LogOut,
+  Search,
   ChevronRight,
   Menu,
   Bell,
@@ -58,14 +58,14 @@ const App: React.FC = () => {
   const [currentAgency, setCurrentAgency] = useState<Agency | null>(null);
   const [currentView, setCurrentView] = useState<AppView>('dashboard');
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  
+
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isCreateContactModalOpen, setIsCreateContactModalOpen] = useState(false);
   const [isCreateListingModalOpen, setIsCreateListingModalOpen] = useState(false);
   const [isCreateOfferModalOpen, setIsCreateOfferModalOpen] = useState(false);
   const [isCreateTaskModalOpen, setIsCreateTaskModalOpen] = useState(false);
   const [importType, setImportType] = useState<ImportType>('contacts');
-  
+
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -102,19 +102,55 @@ const App: React.FC = () => {
     closingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
   });
 
-  const loadData = useCallback((user: User) => {
-    setContacts(db.getContacts(user.agencyId, user.role, user.id));
-    setListings(db.getListings(user.agencyId, user.role, user.id));
-    setTasks(db.getTasks(user.agencyId, user.role, user.id));
-    setOffers(db.getOffers(user.agencyId, user.role, user.id));
-    setThreads(db.getThreads(user.agencyId));
-    setActivities(db.getActivity(user.agencyId));
-    setNotifs(db.getNotifications(user.agencyId, user.id));
-    
+  const [loading, setLoading] = useState(false);
+
+  // ... (existing state)
+
+  const loadData = async (user: User) => {
+    setLoading(true);
+    try {
+      const contactsData = await db.getContacts(user.agencyId, user.role, user.id);
+      setContacts(contactsData);
+      // ... (rest of loadData)
+
+      const handleUpdateOffer = async (id: string, status: OfferStatus) => {
+        if (!currentUser) return;
+        const allOffers = await db.getOffers(currentUser.agencyId, 'admin', '');
+        const offer = allOffers.find(o => o.id === id);
+        if (offer) {
+          offer.status = status;
+          await db.saveOffer(offer, currentUser.id);
+          await db.logActivity(currentUser.agencyId, currentUser.id, `marked offer for ${offer.buyerName} as`, status);
+          loadData(currentUser);
+        }
+      };
+
+      const listingsData = await db.getListings(user.agencyId, user.role, user.id);
+      setListings(listingsData);
+
+      const tasksData = await db.getTasks(user.agencyId, user.role, user.id);
+      setTasks(tasksData);
+
+      const offersData = await db.getOffers(user.agencyId, user.role, user.id);
+      setOffers(offersData);
+
+      const threadsData = await db.getThreads(user.agencyId);
+      setThreads(threadsData);
+
+      const activityData = await db.getActivity(user.agencyId);
+      setActivities(activityData);
+
+      const notifsData = await db.getNotifications(user.agencyId, user.id);
+      setNotifs(notifsData);
+    } catch (error) {
+      console.error("Failed to load data", error);
+    } finally {
+      setLoading(false);
+    }
     const agenciesStr = localStorage.getItem('ep_agencies');
     const agencies = agenciesStr ? JSON.parse(agenciesStr) : MOCK_AGENCIES;
     setCurrentAgency(agencies.find((a: any) => a.id === user.agencyId) || null);
-  }, []);
+  };
 
   useEffect(() => {
     const saved = localStorage.getItem('ep_current_user');
@@ -160,6 +196,30 @@ const App: React.FC = () => {
     setNewContact({ name: '', email: '', phone: '', tags: '', notes: '' });
     loadData(currentUser);
   };
+
+  const handleSaveManualListing = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!currentUser || !newListing.address) return;
+
+    const listing: Listing = {
+      id: `l-${Math.random().toString(36).substr(2, 9)}`,
+      agencyId: currentUser.agencyId,
+      address: newListing.address,
+      sellerName: newListing.sellerName,
+      price: parseFloat(newListing.price.replace(/[^0-9.]/g, '')) || 0,
+      assignedAgent: newListing.assignedAgent || currentUser.id,
+      status: 'New',
+      createdAt: new Date().toISOString()
+    };
+
+    db.saveListing(listing);
+    db.logActivity(currentUser.agencyId, currentUser.id, 'added new property to pipeline', listing.address);
+    setIsCreateListingModalOpen(false);
+    setNewListing({ address: '', sellerName: '', price: '', assignedAgent: '' });
+    loadData(currentUser);
+  };
+
+
 
   const handleSaveManualTask = (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +290,7 @@ const App: React.FC = () => {
     db.saveOffer(offer, currentUser.id);
     db.logActivity(currentUser.agencyId, currentUser.id, 'finalized offer sheet for buyer', offer.buyerName);
     setIsCreateOfferModalOpen(false);
-    
+
     setNewOffer({
       isExternal: true,
       externalAddress: '',
@@ -244,14 +304,14 @@ const App: React.FC = () => {
       contingencies: ['Inspection', 'Appraisal', 'Financing'],
       closingDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
     });
-    
+
     loadData(currentUser);
   };
 
   const toggleContingency = (c: string) => {
     setNewOffer(prev => ({
       ...prev,
-      contingencies: prev.contingencies.includes(c) 
+      contingencies: prev.contingencies.includes(c)
         ? prev.contingencies.filter(item => item !== c)
         : [...prev.contingencies, c]
     }));
@@ -297,30 +357,128 @@ const App: React.FC = () => {
         return {
           title: 'Properties & Pipeline',
           expectedHeaders: ['Address', 'Seller', 'Price', 'Status'],
-          onImport: (data: any[]) => {
+          fieldAliases: {
+            'Address': ['Property', 'Site', 'Location', 'Street', 'Property Address', 'PropertyAddressFormatted', 'Prop Address'],
+            'Seller': ['Owner', 'Vendor', 'Client', 'Seller Name', 'Listing Agent', 'OwnerNames', 'OwnerLastName'],
+            'Price': ['Cost', 'Value', 'List Price', 'Amount', 'Asking Price', 'SaleAmt', 'Sale Amount', 'Total Assessed'],
+            'Status': ['Stage', 'State', 'Pipeline Status', 'Current Status', 'Status']
+          },
+          onImport: async (data: any[]) => {
             if (!currentUser) return;
-            data.forEach(item => {
-              // Normalize status for categorization
-              let rawStatus = (item.status || item.stage || 'New').trim().toLowerCase();
+            // Process individually or batch? Batch is better but upsert supports array.
+            // For logic complexity (price/status deteciton), we process one by one
+            const promises = data.map(item => {
+              // 1. Enhanced Price Parsing
+              let priceVal = 0;
+
+              // Try explicit price fields first
+              const priceStr = item.price || item.cost || item.value || item.amount || '';
+              if (priceStr) {
+                // Remove currency symbols, commas, spaces
+                const cleaned = String(priceStr).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
+                priceVal = parseFloat(cleaned) || 0;
+              }
+
+              // Fallback: Search all fields for number that looks like a price (5-8 digits)
+              if (priceVal === 0) {
+                const priceKey = Object.keys(item).find(k => {
+                  const val = String(item[k]).replace(/[$,\s]/g, '');
+                  const num = parseFloat(val.replace(/[^0-9.]/g, ''));
+                  // Price likely between 10,000 and 99,999,999
+                  return num >= 10000 && num <= 99999999;
+                });
+                if (priceKey) {
+                  const cleaned = String(item[priceKey]).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
+                  priceVal = parseFloat(cleaned) || 0;
+                }
+              }
+
+              // 2. Enhanced Status Detection
+              let rawStatus = (item.status || item.stage || item.state || '').toString().trim().toLowerCase();
+
+              // PRIORITY CHECK: MLS/Tax Record Logic for Settle Date
+              // If we have a Settle Date (and it's not a generic placeholder), this is definitely a Sold property.
+              // We check this BEFORE anything else to override potentially confusing "status" fields (like "Malvern, PA")
+              const settleDateVal = item.settledate || item['settle date'] || item.closedate || item['close date'] || '';
+              const hasValidSettleDate = settleDateVal && settleDateVal.length > 5 && !isNaN(Date.parse(settleDateVal));
+
+              if (hasValidSettleDate) {
+                rawStatus = 'sold';
+              } else {
+                // Standard Logic if no Settle Date found
+
+                // If no status field, search all fields for status keywords
+                if (!rawStatus) {
+                  const statusKey = Object.keys(item).find(k =>
+                    k.toLowerCase().includes('status') ||
+                    k.toLowerCase().includes('stage') ||
+                    k.toLowerCase().includes('state')
+                  );
+                  if (statusKey) rawStatus = String(item[statusKey]).trim().toLowerCase();
+                }
+
+                // NUCLEAR OPTION: If header mapping failed, search EVERY CELL for status keywords
+                // ONLY run this if we didn't find a standard status field 
+                if (!rawStatus) {
+                  const statusKeywords = ['sold', 'closed', 'settled', 'contract', 'pending', 'escrow', 'active', 'market', 'listed', 'new', 'draft'];
+                  const statusKey = Object.keys(item).find(k => {
+                    const val = String(item[k]).toLowerCase();
+                    return statusKeywords.some(kw => val.includes(kw));
+                  });
+
+                  if (statusKey) rawStatus = String(item[statusKey]).trim().toLowerCase();
+                }
+              }
+
+              // 3. Fallback Price: Search all fields for ANY number (lowered threshold to 500)
+              if (priceVal === 0) {
+                const priceKey = Object.keys(item).find(k => {
+                  // Skip keys that we just used for status
+                  if (rawStatus && String(item[k]).toLowerCase() === rawStatus) return false;
+                  // Skip Zip codes
+                  if (k.toLowerCase().includes('zip')) return false;
+
+                  const val = String(item[k]).replace(/[$,\s]/g, '');
+                  // Check if it's a pure number string
+                  if (!/^\d+(\.\d+)?$/.test(val)) return false;
+
+                  const num = parseFloat(val);
+                  return num >= 500 && num <= 999999999;
+                });
+                if (priceKey) {
+                  const cleaned = String(item[priceKey]).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
+                  priceVal = parseFloat(cleaned) || 0;
+                }
+              }
+
               let finalStatus: ListingStatus = 'New';
-              if (rawStatus.includes('active')) finalStatus = 'Active';
-              else if (rawStatus.includes('contract') || rawStatus.includes('pending')) finalStatus = 'Under Contract';
-              else if (rawStatus.includes('sold') || rawStatus.includes('closed')) finalStatus = 'Sold';
+
+              if (['sold', 'closed', 'settled', 'archived', 'done', 'complete'].some(k => rawStatus.includes(k))) {
+                finalStatus = 'Sold';
+              } else if (['contract', 'pending', 'option', 'escrow', 'offer', 'accepted'].some(k => rawStatus.includes(k))) {
+                finalStatus = 'Under Contract';
+              } else if (['active', 'sale', 'available', 'market', 'listed', 'open'].some(k => rawStatus.includes(k))) {
+                finalStatus = 'Active';
+              } else if (['new', 'draft', 'incoming', 'fresh'].some(k => rawStatus.includes(k))) {
+                finalStatus = 'New';
+              }
 
               const listing: Listing = {
                 id: `l-${Math.random().toString(36).substr(2, 9)}`,
                 agencyId: currentUser.agencyId,
-                address: item.address || item.site || 'Unknown Address',
-                sellerName: item.seller || item.owner || 'Unknown Seller',
-                price: parseFloat(String(item.price).replace(/[^0-9.]/g, '')) || 0,
+                address: item.address || item.property || item.site || item.location || 'Unknown Address',
+                sellerName: item.seller || item.owner || item.vendor || item.client || 'Unknown Seller',
+                price: priceVal,
                 assignedAgent: currentUser.id,
                 status: finalStatus,
                 createdAt: new Date().toISOString(),
+                notes: item.notes || `Imported MLS Record. MLS#: ${item.mlsnumber || item['mls number'] || 'N/A'}`,
                 metadata: item
               };
-              db.saveListing(listing);
+              return db.saveListing(listing);
             });
-            loadData(currentUser);
+            await Promise.all(promises);
+            await loadData(currentUser);
           }
         };
       case 'offers':
@@ -333,7 +491,7 @@ const App: React.FC = () => {
               const offer: Offer = {
                 id: `off-${Math.random().toString(36).substr(2, 9)}`,
                 agencyId: currentUser.agencyId,
-                listingId: '', 
+                listingId: '',
                 buyerName: item.buyer || 'Unknown Buyer',
                 price: parseFloat(String(item.amount).replace(/[^0-9.]/g, '')) || 0,
                 downPayment: 0,
@@ -378,11 +536,41 @@ const App: React.FC = () => {
         return {
           title: 'CRM Leads & Contacts',
           expectedHeaders: ['Name', 'Email', 'Phone'],
+          // Added aliases for better matching
+          fieldAliases: {
+            'Name': ['Full Name', 'Contact Name', 'Lead Name', 'Client'],
+            'Email': ['Email Address', 'E-mail', 'Contact Email'],
+            'Phone': ['Mobile', 'Cell', 'Telephone', 'Ph', 'Contact Number', 'Phone Number']
+          },
           onImport: (data: any[]) => {
             if (!currentUser) return;
             data.forEach(item => {
-              // Better phone mapping search
-              const phoneVal = item.phone || item.mobile || item.cell || item.number || '';
+              // 1. Try explicit columns first
+              let phoneVal = item.phone || item.mobile || item.cell || item.number || '';
+
+              // 2. Fallback: Search keys with "phone"
+              if (!phoneVal) {
+                const phoneKey = Object.keys(item).find(k =>
+                  k.toLowerCase().includes('phone') ||
+                  k.toLowerCase().includes('mobile') ||
+                  k.toLowerCase().includes('cell')
+                );
+                if (phoneKey) phoneVal = item[phoneKey];
+              }
+
+              // 3. Ultimate Fallback: Scan ALL values for phone-like patterns
+              // Regex: matches numbers causing at least 7 digits, optional + prefix, spaces/dashes allowd
+              if (!phoneVal) {
+                const phoneRegex = /^(\+?[\d\s-]{7,})$/;
+                // We exclude values that are likely just IDs (pure digits > 15 chars) or dates
+                const potentialKey = Object.keys(item).find(k => {
+                  const val = String(item[k]).trim();
+                  // Must contain some digits, not include letters (except x maybe), be reasonably long
+                  return val.length > 6 && val.length < 20 && /[\d]{5,}/.test(val) && !/[a-wy-z]/i.test(val) && phoneRegex.test(val);
+                });
+                if (potentialKey) phoneVal = item[potentialKey];
+              }
+
               const contact: Contact = {
                 id: `c-${Math.random().toString(36).substr(2, 9)}`,
                 agencyId: currentUser.agencyId,
@@ -403,51 +591,61 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteContacts = (ids: string[]) => {
+    db.deleteContacts(ids);
+    loadData(currentUser!);
+  };
+
   const renderView = () => {
     if (!currentUser) return null;
-    switch(currentView) {
+    switch (currentView) {
       case 'dashboard':
-        return <Dashboard 
-          contacts={contacts} listings={listings} tasks={tasks} offers={offers} 
-          activities={activities} user={currentUser} users={MOCK_USERS} 
+        return <Dashboard
+          contacts={contacts} listings={listings} tasks={tasks} offers={offers}
+          activities={activities} user={currentUser} users={MOCK_USERS}
         />;
       case 'contacts':
-        return <Contacts 
-          contacts={contacts} users={MOCK_USERS} currentUser={currentUser} 
+        return <Contacts
+          contacts={contacts} users={MOCK_USERS} currentUser={currentUser}
           onRefresh={() => loadData(currentUser)}
           onImport={() => handleOpenImport('contacts')}
           onAddContact={() => setIsCreateContactModalOpen(true)}
+          onDelete={handleDeleteContacts}
         />;
       case 'pipeline':
-        return <Pipeline 
-          listings={listings} users={MOCK_USERS} currentUser={currentUser} 
+        return <Pipeline
+          listings={listings} users={MOCK_USERS} currentUser={currentUser}
           onMove={handleMoveListing} onRefresh={() => loadData(currentUser)}
           onImport={() => handleOpenImport('listings')}
           onAddListing={() => setIsCreateListingModalOpen(true)}
+          onDelete={(ids) => {
+            db.deleteListings(ids);
+            loadData(currentUser);
+          }}
         />;
       case 'offers':
-        return <Offers 
-          offers={offers} listings={listings} users={MOCK_USERS} currentUser={currentUser} 
+        return <Offers
+          offers={offers} listings={listings} users={MOCK_USERS} currentUser={currentUser}
           onUpdateStatus={handleUpdateOffer} onImport={() => handleOpenImport('offers')}
           onRefresh={() => loadData(currentUser)}
           onAddOffer={() => setIsCreateOfferModalOpen(true)}
         />;
       case 'tasks':
-        return <Tasks 
-          tasks={tasks} users={MOCK_USERS} currentUser={currentUser} 
+        return <Tasks
+          tasks={tasks} users={MOCK_USERS} currentUser={currentUser}
           onRefresh={() => loadData(currentUser)}
           onAddTask={() => setIsCreateTaskModalOpen(true)}
           onImport={() => handleOpenImport('tasks')}
         />;
       case 'messaging':
-        return <Messaging 
-          threads={threads} users={MOCK_USERS} currentUser={currentUser} 
+        return <Messaging
+          threads={threads} users={MOCK_USERS} currentUser={currentUser}
           onSendMessage={handleSendMessage}
         />;
       case 'admin':
-        return <AgencyAdmin 
-          agency={currentAgency!} users={MOCK_USERS.filter(u => u.agencyId === currentUser.agencyId)} 
-          activities={activities} 
+        return <AgencyAdmin
+          agency={currentAgency!} users={MOCK_USERS.filter(u => u.agencyId === currentUser.agencyId)}
+          activities={activities}
         />;
       default:
         return <div>Section Coming Soon</div>;
@@ -483,14 +681,14 @@ const App: React.FC = () => {
   }
 
   return (
-    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans antialiased text-slate-900">
+    <div className="flex h-screen bg-slate-50 overflow-hidden font-sans antialiased text-slate-900" >
       <aside className={`${isSidebarOpen ? 'w-80' : 'w-24'} bg-white border-r border-slate-200 flex flex-col transition-all duration-300 ease-in-out z-40`}>
         <div className="p-8 shrink-0 flex items-center justify-between">
           <div className={`flex items-center gap-3 ${!isSidebarOpen && 'hidden'}`}>
-             <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
-                <Building2 className="w-6 h-6 text-white" />
-             </div>
-             <span className="text-2xl font-black tracking-tighter text-slate-900">{APP_NAME}</span>
+            <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-100">
+              <Building2 className="w-6 h-6 text-white" />
+            </div>
+            <span className="text-2xl font-black tracking-tighter text-slate-900">{APP_NAME}</span>
           </div>
           <button onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="p-2 hover:bg-slate-100 rounded-xl transition-colors">
             {isSidebarOpen ? <Menu className="w-6 h-6 text-slate-400" /> : <ChevronRight className="w-6 h-6 text-slate-400" />}
@@ -504,9 +702,8 @@ const App: React.FC = () => {
               <button
                 key={item.id}
                 onClick={() => setCurrentView(item.id)}
-                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all group ${
-                  isActive ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
-                }`}
+                className={`w-full flex items-center gap-4 px-5 py-3.5 rounded-xl text-sm font-bold transition-all group ${isActive ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-100' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'
+                  }`}
               >
                 <Icon className={`w-5 h-5 ${isActive ? 'text-white' : 'text-slate-300 group-hover:text-indigo-500'}`} />
                 {isSidebarOpen && <span>{item.label}</span>}
@@ -527,9 +724,9 @@ const App: React.FC = () => {
           <div className="flex items-center gap-6 flex-1 max-w-2xl">
             <div className="relative w-full">
               <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-              <input 
-                type="text" 
-                placeholder="Search deals, clients, addresses..." 
+              <input
+                type="text"
+                placeholder="Search deals, clients, addresses..."
                 className="w-full bg-slate-50 border-none rounded-lg py-2.5 pl-11 pr-6 text-sm font-medium focus:ring-2 focus:ring-indigo-100 focus:bg-white transition-all placeholder:text-slate-300"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
@@ -537,14 +734,14 @@ const App: React.FC = () => {
             </div>
           </div>
           <div className="flex items-center gap-4">
-             <div className="hidden md:flex flex-col text-right mr-2">
-                <p className="text-xs font-black text-slate-900 uppercase tracking-widest">{currentUser.name}</p>
-                <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Workspace Member</p>
-             </div>
-             <button className="relative p-2.5 hover:bg-slate-100 rounded-lg transition-all border">
-                <Bell className="w-5 h-5 text-slate-400" />
-             </button>
-             <img src={currentUser.avatar} className="w-10 h-10 rounded-lg border shadow-md cursor-pointer hover:scale-105 transition-transform" alt="" />
+            <div className="hidden md:flex flex-col text-right mr-2">
+              <p className="text-xs font-black text-slate-900 uppercase tracking-widest">{currentUser.name}</p>
+              <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest">Workspace Member</p>
+            </div>
+            <button className="relative p-2.5 hover:bg-slate-100 rounded-lg transition-all border">
+              <Bell className="w-5 h-5 text-slate-400" />
+            </button>
+            <img src={currentUser.avatar} className="w-10 h-10 rounded-lg border shadow-md cursor-pointer hover:scale-105 transition-transform" alt="" />
           </div>
         </header>
 
@@ -572,34 +769,34 @@ const App: React.FC = () => {
               <form onSubmit={handleSaveManualContact} className="p-10 space-y-6">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Full Legal Name</label>
-                  <input 
-                    required 
-                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                    value={newContact.name} 
-                    onChange={e => setNewContact({...newContact, name: e.target.value})} 
-                    placeholder="e.g. Jonathan Wick" 
+                  <input
+                    required
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newContact.name}
+                    onChange={e => setNewContact({ ...newContact, name: e.target.value })}
+                    placeholder="e.g. Jonathan Wick"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Email Address</label>
-                    <input 
-                      required 
+                    <input
+                      required
                       type="email"
-                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                      value={newContact.email} 
-                      onChange={e => setNewContact({...newContact, email: e.target.value})} 
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newContact.email}
+                      onChange={e => setNewContact({ ...newContact, email: e.target.value })}
                       placeholder="leads@agency.com"
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Phone Number</label>
-                    <input 
-                      required 
-                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                      value={newContact.phone} 
-                      onChange={e => setNewContact({...newContact, phone: e.target.value})} 
+                    <input
+                      required
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newContact.phone}
+                      onChange={e => setNewContact({ ...newContact, phone: e.target.value })}
                       placeholder="+1 (555) 000-0000"
                     />
                   </div>
@@ -609,11 +806,11 @@ const App: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">CRM Tags (Comma separated)</label>
                   <div className="relative">
                     <Tag className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
-                    <input 
-                      className="w-full px-5 py-4 pl-11 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                      value={newContact.tags} 
-                      onChange={e => setNewContact({...newContact, tags: e.target.value})} 
-                      placeholder="Buyer, High Intent, Investor..." 
+                    <input
+                      className="w-full px-5 py-4 pl-11 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newContact.tags}
+                      onChange={e => setNewContact({ ...newContact, tags: e.target.value })}
+                      placeholder="Buyer, High Intent, Investor..."
                     />
                   </div>
                 </div>
@@ -622,11 +819,11 @@ const App: React.FC = () => {
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Strategic Notes</label>
                   <div className="relative">
                     <StickyNote className="absolute left-4 top-4 w-4 h-4 text-slate-300" />
-                    <textarea 
-                      className="w-full px-5 py-4 pl-11 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm min-h-[100px]" 
-                      value={newContact.notes} 
-                      onChange={e => setNewContact({...newContact, notes: e.target.value})} 
-                      placeholder="Key details about the lead's requirements..." 
+                    <textarea
+                      className="w-full px-5 py-4 pl-11 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm min-h-[100px]"
+                      value={newContact.notes}
+                      onChange={e => setNewContact({ ...newContact, notes: e.target.value })}
+                      placeholder="Key details about the lead's requirements..."
                     />
                   </div>
                 </div>
@@ -635,6 +832,93 @@ const App: React.FC = () => {
                   <button type="button" onClick={() => setIsCreateContactModalOpen(false)} className="flex-1 py-5 text-slate-500 font-black uppercase tracking-widest text-xs hover:bg-slate-50 rounded-2xl transition-all">Discard</button>
                   <button type="submit" className="flex-[2] py-5 bg-slate-900 text-white font-black uppercase tracking-[0.2em] text-xs rounded-[1.5rem] shadow-2xl hover:bg-indigo-600 transition-all flex items-center justify-center gap-3">
                     <Save className="w-4 h-4" /> Initialize Lead
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+
+        {/* CREATE LISTING MODAL */}
+        {isCreateListingModalOpen && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md">
+            <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200 border border-slate-100">
+              <div className="px-10 py-8 border-b flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-100">
+                    <Home className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="text-2xl font-black text-slate-900 tracking-tight">New Asset Entry</h3>
+                    <p className="text-[10px] text-indigo-600 font-black uppercase tracking-widest mt-0.5">Pipeline Injection</p>
+                  </div>
+                </div>
+                <button onClick={() => setIsCreateListingModalOpen(false)} className="p-3 hover:bg-slate-200 rounded-full text-slate-400 transition-all"><X className="w-6 h-6" /></button>
+              </div>
+
+              <form onSubmit={handleSaveManualListing} className="p-10 space-y-6">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Property Address</label>
+                  <input
+                    required
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newListing.address}
+                    onChange={e => setNewListing({ ...newListing, address: e.target.value })}
+                    placeholder="e.g. 123 Skyline Blvd"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Seller / Vendor</label>
+                  <input
+                    required
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newListing.sellerName}
+                    onChange={e => setNewListing({ ...newListing, sellerName: e.target.value })}
+                    placeholder="e.g. Meridian Holdings LLC"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Target List Price ($)</label>
+                  <input
+                    required
+                    type="number"
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newListing.price}
+                    onChange={e => setNewListing({ ...newListing, price: e.target.value })}
+                    placeholder="e.g. 1500000"
+                  />
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Assigned Agent</label>
+                  <select
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newListing.assignedAgent}
+                    onChange={e => setNewListing({ ...newListing, assignedAgent: e.target.value })}
+                  >
+                    <option value="">Assign to Me ({currentUser?.name})</option>
+                    {MOCK_USERS.filter(u => u.agencyId === currentUser?.agencyId && u.id !== currentUser?.id).map(u => (
+                      <option key={u.id} value={u.id}>{u.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="pt-6 border-t flex gap-4">
+                  <button
+                    type="button"
+                    onClick={() => setIsCreateListingModalOpen(false)}
+                    className="flex-1 py-4 text-slate-500 font-bold hover:bg-slate-50 rounded-2xl transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    className="flex-[2] py-4 bg-indigo-600 text-white font-black rounded-2xl shadow-xl shadow-indigo-100 hover:bg-indigo-700 transition-all flex items-center justify-center gap-2"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Create Asset
                   </button>
                 </div>
               </form>
@@ -661,32 +945,32 @@ const App: React.FC = () => {
               <form onSubmit={handleSaveManualTask} className="p-10 space-y-6">
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Task Definition</label>
-                  <input 
-                    required 
-                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                    value={newTask.title} 
-                    onChange={e => setNewTask({...newTask, title: e.target.value})} 
-                    placeholder="e.g. Follow up on 123 Oak St inspection" 
+                  <input
+                    required
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                    value={newTask.title}
+                    onChange={e => setNewTask({ ...newTask, title: e.target.value })}
+                    placeholder="e.g. Follow up on 123 Oak St inspection"
                   />
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Due Date</label>
-                    <input 
-                      required 
+                    <input
+                      required
                       type="date"
-                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                      value={newTask.dueDate} 
-                      onChange={e => setNewTask({...newTask, dueDate: e.target.value})} 
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newTask.dueDate}
+                      onChange={e => setNewTask({ ...newTask, dueDate: e.target.value })}
                     />
                   </div>
                   <div className="space-y-1">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Priority</label>
-                    <select 
-                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none" 
-                      value={newTask.priority} 
-                      onChange={e => setNewTask({...newTask, priority: e.target.value as any})}
+                    <select
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none"
+                      value={newTask.priority}
+                      onChange={e => setNewTask({ ...newTask, priority: e.target.value as any })}
                     >
                       <option value="Low">Low Priority</option>
                       <option value="Medium">Medium Priority</option>
@@ -697,10 +981,10 @@ const App: React.FC = () => {
 
                 <div className="space-y-1">
                   <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Assign To Specialist</label>
-                  <select 
-                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none" 
-                    value={newTask.assignedTo} 
-                    onChange={e => setNewTask({...newTask, assignedTo: e.target.value})}
+                  <select
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none"
+                    value={newTask.assignedTo}
+                    onChange={e => setNewTask({ ...newTask, assignedTo: e.target.value })}
                   >
                     <option value="">Myself ({currentUser.name})</option>
                     {MOCK_USERS.filter(u => u.agencyId === currentUser.agencyId && u.id !== currentUser.id).map(u => (
@@ -741,23 +1025,23 @@ const App: React.FC = () => {
                   <h4 className="text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] border-b pb-2">1. Asset Identification</h4>
                   <div className="grid grid-cols-1 gap-4">
                     <div className="flex bg-slate-100 p-1.5 rounded-2xl gap-2">
-                      <button type="button" onClick={() => setNewOffer({...newOffer, isExternal: true})} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${newOffer.isExternal ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>External Site</button>
-                      <button type="button" onClick={() => setNewOffer({...newOffer, isExternal: false})} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${!newOffer.isExternal ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Internal Listing</button>
+                      <button type="button" onClick={() => setNewOffer({ ...newOffer, isExternal: true })} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${newOffer.isExternal ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>External Site</button>
+                      <button type="button" onClick={() => setNewOffer({ ...newOffer, isExternal: false })} className={`flex-1 py-3 text-xs font-black uppercase tracking-widest rounded-xl transition-all ${!newOffer.isExternal ? 'bg-white text-indigo-600 shadow-md' : 'text-slate-400'}`}>Internal Listing</button>
                     </div>
                     {newOffer.isExternal ? (
-                      <input 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.externalAddress} 
-                        onChange={e => setNewOffer({...newOffer, externalAddress: e.target.value})} 
-                        placeholder="Full Street Address, City, State, Zip" 
+                      <input
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.externalAddress}
+                        onChange={e => setNewOffer({ ...newOffer, externalAddress: e.target.value })}
+                        placeholder="Full Street Address, City, State, Zip"
                       />
                     ) : (
-                      <select 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.listingId} 
-                        onChange={e => setNewOffer({...newOffer, listingId: e.target.value})}
+                      <select
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.listingId}
+                        onChange={e => setNewOffer({ ...newOffer, listingId: e.target.value })}
                       >
                         <option value="">Select office property...</option>
                         {listings.map(l => <option key={l.id} value={l.id}>{l.address} (${l.price.toLocaleString()})</option>)}
@@ -771,40 +1055,40 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase">Purchase Price ($)</label>
-                      <input 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-black text-indigo-600 text-lg" 
-                        value={newOffer.price} 
-                        onChange={e => setNewOffer({...newOffer, price: e.target.value})} 
-                        placeholder="0.00" 
+                      <input
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-black text-indigo-600 text-lg"
+                        value={newOffer.price}
+                        onChange={e => setNewOffer({ ...newOffer, price: e.target.value })}
+                        placeholder="0.00"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Down Payment ($)</label>
-                      <input 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.downPayment} 
-                        onChange={e => setNewOffer({...newOffer, downPayment: e.target.value})} 
-                        placeholder="Amount at closing" 
+                      <input
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.downPayment}
+                        onChange={e => setNewOffer({ ...newOffer, downPayment: e.target.value })}
+                        placeholder="Amount at closing"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Earnest Money / Escrow ($)</label>
-                      <input 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.earnestMoney} 
-                        onChange={e => setNewOffer({...newOffer, earnestMoney: e.target.value})} 
-                        placeholder="Initial deposit" 
+                      <input
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.earnestMoney}
+                        onChange={e => setNewOffer({ ...newOffer, earnestMoney: e.target.value })}
+                        placeholder="Initial deposit"
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Financing Strategy</label>
-                      <select 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none" 
-                        value={newOffer.financing} 
-                        onChange={e => setNewOffer({...newOffer, financing: e.target.value as any})}
+                      <select
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none"
+                        value={newOffer.financing}
+                        onChange={e => setNewOffer({ ...newOffer, financing: e.target.value as any })}
                       >
                         <option value="Cash">Cash Offer</option>
                         <option value="Conventional">Conventional Loan</option>
@@ -820,26 +1104,26 @@ const App: React.FC = () => {
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Inspection Period (Days)</label>
-                      <input 
-                        required 
-                        type="number" 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.inspectionPeriod} 
-                        onChange={e => setNewOffer({...newOffer, inspectionPeriod: e.target.value})} 
+                      <input
+                        required
+                        type="number"
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.inspectionPeriod}
+                        onChange={e => setNewOffer({ ...newOffer, inspectionPeriod: e.target.value })}
                       />
                     </div>
                     <div className="space-y-1">
                       <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Requested Closing Date</label>
-                      <input 
-                        required 
-                        type="date" 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.closingDate} 
-                        onChange={e => setNewOffer({...newOffer, closingDate: e.target.value})} 
+                      <input
+                        required
+                        type="date"
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newOffer.closingDate}
+                        onChange={e => setNewOffer({ ...newOffer, closingDate: e.target.value })}
                       />
                     </div>
                   </div>
-                  
+
                   <div className="pt-2">
                     <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest block mb-3">Critical Contingencies</label>
                     <div className="flex flex-wrap gap-2">
@@ -850,17 +1134,17 @@ const App: React.FC = () => {
                       ))}
                     </div>
                   </div>
-                  
+
                   <div className="space-y-1 pt-2">
-                      <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Buyer Entity Name</label>
-                      <input 
-                        required 
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm" 
-                        value={newOffer.buyerName} 
-                        onChange={e => setNewOffer({...newOffer, buyerName: e.target.value})} 
-                        placeholder="John & Mary Doe" 
-                      />
-                    </div>
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">Buyer Entity Name</label>
+                    <input
+                      required
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newOffer.buyerName}
+                      onChange={e => setNewOffer({ ...newOffer, buyerName: e.target.value })}
+                      placeholder="John & Mary Doe"
+                    />
+                  </div>
                 </div>
 
                 <div className="pt-6 border-t flex gap-4">
@@ -876,15 +1160,15 @@ const App: React.FC = () => {
 
         {/* Use a unique key for each import type to ensure the modal state is completely destroyed/recreated when switching sections */}
         {isImportModalOpen && (
-          <CSVImportModal 
+          <CSVImportModal
             key={importType}
-            isOpen={isImportModalOpen} 
-            onClose={() => setIsImportModalOpen(false)} 
-            {...getImportConfig()} 
+            isOpen={isImportModalOpen}
+            onClose={() => setIsImportModalOpen(false)}
+            {...getImportConfig()}
           />
         )}
       </main>
-    </div>
+    </div >
   );
 };
 

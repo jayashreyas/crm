@@ -2,8 +2,8 @@
 import { GoogleGenAI, Type } from "@google/genai";
 import { Listing, Offer, Thread, Message, AIScore } from "../types";
 
-// Always initialize GoogleGenAI with named apiKey parameter using process.env.API_KEY directly
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Always initialize GoogleGenAI with named apiKey parameter using VITE_GEMINI_API_KEY
+const ai = new GoogleGenAI({ apiKey: import.meta.env.VITE_GEMINI_API_KEY });
 
 export class AIService {
   static async scoreDeal(listing: Listing, notes: string = ""): Promise<AIScore> {
@@ -24,9 +24,9 @@ export class AIService {
             score: { type: Type.NUMBER },
             explanation: { type: Type.STRING },
             risks: { type: Type.ARRAY, items: { type: Type.STRING } },
-            urgency: { 
-              type: Type.STRING, 
-              description: "The urgency of the deal: Low, Medium, or High" 
+            urgency: {
+              type: Type.STRING,
+              description: "The urgency of the deal: Low, Medium, or High"
             }
           },
           required: ["score", "explanation", "risks", "urgency"]
@@ -38,7 +38,7 @@ export class AIService {
     const text = response.text;
     const jsonStr = text ? text.trim() : "{}";
     const result = JSON.parse(jsonStr);
-    
+
     return {
       ...result,
       lastUpdated: new Date().toISOString()
