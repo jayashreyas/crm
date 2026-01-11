@@ -181,7 +181,7 @@ const App: React.FC = () => {
     if (!currentUser || !newContact.name) return;
 
     const contact: Contact = {
-      id: `c-${Date.now()}`,
+      id: crypto.randomUUID(),
       agencyId: currentUser.agencyId,
       name: newContact.name,
       email: newContact.email,
@@ -205,7 +205,7 @@ const App: React.FC = () => {
     if (!currentUser || !newListing.address) return;
 
     const listing: Listing = {
-      id: `l-${Math.random().toString(36).substr(2, 9)}`,
+      id: crypto.randomUUID(),
       agencyId: currentUser.agencyId,
       address: newListing.address,
       sellerName: newListing.sellerName,
@@ -231,7 +231,7 @@ const App: React.FC = () => {
     if (!currentUser || !newTask.title) return;
 
     const task: Task = {
-      id: `t-${Date.now()}`,
+      id: crypto.randomUUID(),
       agencyId: currentUser.agencyId,
       title: newTask.title,
       assignedTo: newTask.assignedTo || currentUser.id,
@@ -256,7 +256,7 @@ const App: React.FC = () => {
 
     if (newOffer.isExternal && newOffer.externalAddress) {
       const shellListing: Listing = {
-        id: `l-ext-${Math.random().toString(36).substr(2, 9)}`,
+        id: crypto.randomUUID(),
         agencyId: currentUser.agencyId,
         address: newOffer.externalAddress,
         sellerName: 'Listing Agent / Seller Side',
@@ -277,7 +277,7 @@ const App: React.FC = () => {
     }
 
     const offer: Offer = {
-      id: `off-${Math.random().toString(36).substr(2, 9)}`,
+      id: crypto.randomUUID(),
       agencyId: currentUser.agencyId,
       listingId: finalListingId,
       buyerName: newOffer.buyerName,
@@ -523,7 +523,7 @@ const App: React.FC = () => {
             if (!currentUser) return;
             data.forEach(item => {
               const task: Task = {
-                id: `t-${Math.random().toString(36).substr(2, 9)}`,
+                id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
                 title: item.title || 'Untitled Task',
                 assignedTo: currentUser.id,
@@ -578,7 +578,7 @@ const App: React.FC = () => {
               }
 
               const contact: Contact = {
-                id: `c-${Math.random().toString(36).substr(2, 9)}`,
+                id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
                 name: item.name || 'Unknown',
                 email: item.email || '',
@@ -1054,7 +1054,7 @@ const App: React.FC = () => {
                     onChange={e => setNewTask({ ...newTask, assignedTo: e.target.value })}
                   >
                     <option value="">Myself ({currentUser.name})</option>
-                    {MOCK_USERS.filter(u => u.agencyId === currentUser.agencyId && u.id !== currentUser.id).map(u => (
+                    {users.filter(u => u.agencyId === currentUser.agencyId && u.id !== currentUser.id).map(u => (
                       <option key={u.id} value={u.id}>{u.name}</option>
                     ))}
                   </select>
