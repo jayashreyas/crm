@@ -38,5 +38,5 @@ export const NAV_ITEMS = [
   { id: 'tasks' as AppView, label: 'Tasks', icon: CheckSquare },
   { id: 'messaging' as AppView, label: 'Messaging', icon: MessageSquare },
   { id: 'admin' as AppView, label: 'Team Control', icon: ShieldCheck, roles: ['admin'] },
-  { id: 'settings' as AppView, label: 'Settings', icon: Settings },
+  { id: 'admin' as AppView, label: 'Team Control', icon: ShieldCheck, roles: ['admin'] },
 ];
