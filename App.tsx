@@ -73,6 +73,8 @@ const App: React.FC = () => {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [activities, setActivities] = useState<Activity[]>([]);
   const [notifs, setNotifs] = useState<Notification[]>([]);
+  const [notifs, setNotifs] = useState<Notification[]>([]);
+  const [users, setUsers] = useState<User[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
 
   // Manual Form States
@@ -123,6 +125,17 @@ const App: React.FC = () => {
 
       const threadsData = await db.getThreads(user.agencyId);
       setThreads(threadsData);
+
+      const usersData = await db.getUsers(user.agencyId);
+      // If no users found (first load), seed with current user/mocks if needed, or just set empty?
+      // Better to ensure we at least have the current user in the list
+      if (usersData.length === 0 && currentUser) {
+        // This might be a fresh migration, let's auto-save the current user to the DB ?
+        // Or just wait for manual addition. For now, assume fetched list.
+      }
+      // Merge current user if missing (safety net for auth/db sync) or just trust DB.
+      // We will trust the DB, but ensure we fallback to MOCK if empty for demo purposes? NO, user wants real control.
+      setUsers(usersData.length > 0 ? usersData : [user]);
 
       const activityData = await db.getActivity(user.agencyId);
       setActivities(activityData);
@@ -589,11 +602,11 @@ const App: React.FC = () => {
       case 'dashboard':
         return <Dashboard
           contacts={contacts} listings={listings} tasks={tasks} offers={offers}
-          activities={activities} user={currentUser} users={MOCK_USERS}
+          activities={activities} user={currentUser} users={users}
         />;
       case 'contacts':
         return <Contacts
-          contacts={contacts} users={MOCK_USERS} currentUser={currentUser}
+          contacts={contacts} users={users} currentUser={currentUser}
           onRefresh={() => loadData(currentUser)}
           onImport={() => handleOpenImport('contacts')}
           onAddContact={() => setIsCreateContactModalOpen(true)}
@@ -601,7 +614,7 @@ const App: React.FC = () => {
         />;
       case 'pipeline':
         return <Pipeline
-          listings={listings} users={MOCK_USERS} currentUser={currentUser}
+          listings={listings} users={users} currentUser={currentUser}
           onMove={handleMoveListing} onRefresh={() => loadData(currentUser)}
           onImport={() => handleOpenImport('listings')}
           onAddListing={() => setIsCreateListingModalOpen(true)}
@@ -612,27 +625,30 @@ const App: React.FC = () => {
         />;
       case 'offers':
         return <Offers
-          offers={offers} listings={listings} users={MOCK_USERS} currentUser={currentUser}
+          offers={offers} listings={listings} users={users} currentUser={currentUser}
           onUpdateStatus={handleUpdateOffer} onImport={() => handleOpenImport('offers')}
           onRefresh={() => loadData(currentUser)}
           onAddOffer={() => setIsCreateOfferModalOpen(true)}
         />;
       case 'tasks':
         return <Tasks
-          tasks={tasks} users={MOCK_USERS} currentUser={currentUser}
+          tasks={tasks} users={users} currentUser={currentUser}
           onRefresh={() => loadData(currentUser)}
           onAddTask={() => setIsCreateTaskModalOpen(true)}
           onImport={() => handleOpenImport('tasks')}
         />;
       case 'messaging':
         return <Messaging
-          threads={threads} users={MOCK_USERS} currentUser={currentUser}
+          threads={threads} users={users} currentUser={currentUser}
           onSendMessage={handleSendMessage}
         />;
       case 'admin':
         return <AgencyAdmin
-          agency={currentAgency!} users={MOCK_USERS.filter(u => u.agencyId === currentUser.agencyId)}
+          agency={currentAgency!}
+          users={users}
           activities={activities}
+          onAddUser={async (u) => { await db.saveUser(u); loadData(currentUser); }}
+          onDeleteUser={async (id) => { await db.deleteUser(id); loadData(currentUser); }}
         />;
       default:
         return <div>Section Coming Soon</div>;
