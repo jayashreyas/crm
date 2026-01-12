@@ -49,7 +49,8 @@ import {
   Zap,
   CheckSquare,
   UserPlus,
-  StickyNote
+  StickyNote,
+  Loader
 } from 'lucide-react';
 
 type ImportType = 'contacts' | 'listings' | 'offers' | 'tasks';
