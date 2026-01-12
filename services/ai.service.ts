@@ -97,6 +97,54 @@ export class AIService {
       return "AI Service Unavailable.";
     }
   }
+  static async lookupProperty(address: string): Promise<any> {
+    const ai = getAIClient();
+    if (!ai) return null;
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: `Find real estate details for: ${address}.
+        Search for recent listing data (Zillow, Redfin, Realtor.com).
+        
+        Return a JSON object with:
+        - price (number, list price or Zestimate)
+        - bed (number)
+        - bath (number)
+        - sqft (number)
+        - year (number, year built)
+        - estimate (number, estimated value if list price unavailable)
+        - seller (string, listing agent or owner if public)
+        - link (string, source url)
+        
+        If precise data is missing, make best estimates based on search results.`,
+        config: {
+          tools: [{ googleSearchRetrieval: {} }],
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              price: { type: Type.NUMBER },
+              bed: { type: Type.NUMBER },
+              bath: { type: Type.NUMBER },
+              sqft: { type: Type.NUMBER },
+              year: { type: Type.NUMBER },
+              estimate: { type: Type.NUMBER },
+              seller: { type: Type.STRING },
+              link: { type: Type.STRING }
+            }
+          }
+        }
+      });
+
+      const text = response.text;
+      return text ? JSON.parse(text) : null;
+    } catch (e) {
+      console.error("Property Lookup Error:", e);
+      return null;
+    }
+  }
+
   static async parseCSV(csvData: any[], targetType: 'contact' | 'listing' | 'offer' | 'task'): Promise<any[]> {
     const ai = getAIClient();
     if (!ai) return csvData; // Fallback to raw data if AI fails
