@@ -405,7 +405,7 @@ const App: React.FC = () => {
             'Address': ['Property', 'Site', 'Location', 'Street', 'Property Address', 'PropertyAddressFormatted', 'Prop Address'],
             'Seller': ['Owner', 'Vendor', 'Client', 'Seller Name', 'Listing Agent', 'OwnerNames', 'OwnerLastName'],
             'Price': ['Cost', 'Value', 'List Price', 'Amount', 'Asking Price', 'SaleAmt', 'Sale Amount', 'Total Assessed'],
-            'Status': ['Stage', 'State', 'Pipeline Status', 'Current Status', 'Status']
+            'Status': ['Stage', 'State', 'Pipeline Status', 'Current Status', 'Status', 'Listing Status', 'ListingStatus']
           },
           onImport: async (data: any[]) => {
             if (!currentUser) return;
