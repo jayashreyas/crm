@@ -130,7 +130,10 @@ class DBService {
 
   async deleteUser(id: string): Promise<void> {
     const { error } = await supabase.from('users').delete().eq('id', id);
-    if (error) console.error("Error deleting user:", error);
+    if (error) {
+      console.error("Error deleting user:", error);
+      throw error;
+    }
   }
 
   async getUserByEmail(email: string): Promise<User | null> {
@@ -196,7 +199,11 @@ class DBService {
   }
 
   async deleteContacts(ids: string[]): Promise<void> {
-    await supabase.from('contacts').delete().in('id', ids);
+    const { error } = await supabase.from('contacts').delete().in('id', ids);
+    if (error) {
+      console.error("Error deleting contacts:", error);
+      throw error;
+    }
   }
 
   // LISTINGS
@@ -213,7 +220,11 @@ class DBService {
   }
 
   async deleteListings(ids: string[]): Promise<void> {
-    await supabase.from('listings').delete().in('id', ids);
+    const { error } = await supabase.from('listings').delete().in('id', ids);
+    if (error) {
+      console.error("Error deleting listings:", error);
+      throw error;
+    }
   }
 
   async updateListingStatus(id: string, agencyId: string, status: ListingStatus, userId: string): Promise<void> {
