@@ -252,14 +252,26 @@ class DBService {
   async saveOffer(offer: Offer, userId: string): Promise<void> {
     const row = {
       id: offer.id,
-      listing_id: offer.listingId,
+      agency_id: offer.agencyId,
+      listing_id: offer.listingId || null, // Convert empty string to null for UUID field
       buyer_name: offer.buyerName,
       amount: offer.price,
+      earnest_money: offer.earnestMoney,
+      down_payment: offer.downPayment,
+      financing: offer.financing,
+      inspection_period: offer.inspectionPeriod,
+      contingencies: offer.contingencies,
+      closing_date: offer.closingDate,
       status: offer.status,
-      // date: offer.date, // Removed
-      created_at: offer.createdAt
+      assigned_to: offer.assignedTo,
+      created_at: offer.createdAt,
+      metadata: offer.metadata || {}
     };
-    await supabase.from('offers').upsert(row);
+    const { error } = await supabase.from('offers').upsert(row);
+    if (error) {
+      console.error("Error saving offer:", error);
+      throw error;
+    }
   }
 
   async updateOfferSummary(id: string, summary: string): Promise<void> {
