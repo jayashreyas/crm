@@ -97,9 +97,9 @@ export class AIService {
       return "AI Service Unavailable.";
     }
   }
-  static async lookupProperty(address: string): Promise<any> {
+  static async lookupProperty(address: string): Promise<{ success: boolean; data?: any; error?: string }> {
     const ai = getAIClient();
-    if (!ai) return null;
+    if (!ai) return { success: false, error: "API Key Missing. Add VITE_GEMINI_API_KEY to configurations." };
 
     try {
       const response = await ai.models.generateContent({
@@ -138,10 +138,13 @@ export class AIService {
       });
 
       const text = response.text;
-      return text ? JSON.parse(text) : null;
-    } catch (e) {
+      return text ? { success: true, data: JSON.parse(text) } : { success: false, error: "AI returned no data." };
+    } catch (e: any) {
       console.error("Property Lookup Error:", e);
-      return null;
+      let msg = "Could not find property details.";
+      if (e.message?.includes("429")) msg = "Daily AI Quota Exceeded. Try again tomorrow or upgrade API key.";
+      if (e.message?.includes("403")) msg = "API Key Invalid or unauthorized domain.";
+      return { success: false, error: msg };
     }
   }
 

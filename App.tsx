@@ -114,20 +114,21 @@ const App: React.FC = () => {
   const handleAutoFill = async () => {
     if (!newListing.address) return;
     setIsLookingUp(true);
-    const data = await AIService.lookupProperty(newListing.address);
-    if (data) {
+    const result = await AIService.lookupProperty(newListing.address);
+
+    if (result.success && result.data) {
+      const data = result.data;
       setNewListing({
         ...newListing,
         price: data.price ? String(data.price) : newListing.price,
         sellerName: data.seller || newListing.sellerName || 'Unknown',
       });
-      // We'll treat the extra data as metadata when saving
       (newListing as any)._tempMetadata = {
         bed: data.bed, bath: data.bath, sqft: data.sqft, year: data.year, link: data.link
       };
       alert("Auto-filled details found online!");
     } else {
-      alert("Could not find property details online.");
+      alert(result.error || "Could not find property details online.");
     }
     setIsLookingUp(false);
   };
