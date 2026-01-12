@@ -199,10 +199,14 @@ class DBService {
   }
 
   async deleteContacts(ids: string[]): Promise<void> {
-    const { error } = await supabase.from('contacts').delete().in('id', ids);
-    if (error) {
-      console.error("Error deleting contacts:", error);
-      throw error;
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('contacts').delete().in('id', batch);
+      if (error) {
+        console.error("Error deleting contacts batch:", error);
+        throw error;
+      }
     }
   }
 
@@ -220,10 +224,14 @@ class DBService {
   }
 
   async deleteListings(ids: string[]): Promise<void> {
-    const { error } = await supabase.from('listings').delete().in('id', ids);
-    if (error) {
-      console.error("Error deleting listings:", error);
-      throw error;
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('listings').delete().in('id', batch);
+      if (error) {
+        console.error("Error deleting listings batch:", error);
+        throw error;
+      }
     }
   }
 
