@@ -691,25 +691,34 @@ const App: React.FC = () => {
                 let user = await db.getUserByEmail(loginEmail);
 
                 // 2. If not found, check if it's the master admin email
-                if (!user && loginEmail.toLowerCase() === 'shreyas@rm.com') {
-                  const newUser: User = {
-                    id: `u-${Date.now()}`,
-                    agencyId: 'a1', // Default ID for now
+                if (loginEmail.toLowerCase() === 'shreyas@rm.com' && !user) {
+                  // Auto-provision admin
+                  const newAdmin: User = {
+                    id: crypto.randomUUID(),
+                    agencyId: 'a1',
                     name: 'Shreyas',
                     email: loginEmail,
                     role: 'admin',
                     status: 'Active',
-                    aiUsage: 0,
-                    avatar: `https://ui-avatars.com/api/?name=Shreyas&background=random`
+                    aiUsage: 0
                   };
-                  await db.saveUser(newUser);
-                  user = newUser;
-                }
-
-                if (user) {
+                  await db.saveUser(newAdmin);
+                  login(newAdmin);
+                } else if (user) {
                   login(user);
                 } else {
-                  setLoginError('Access denied. Please contact your workspace administrator.');
+                  // New user signup
+                  const newUser: User = {
+                    id: crypto.randomUUID(),
+                    agencyId: 'a1', // default to main agency for now
+                    name: loginEmail.split('@')[0],
+                    email: loginEmail,
+                    role: 'agent', // default role
+                    status: 'Active',
+                    aiUsage: 0
+                  };
+                  await db.saveUser(newUser);
+                  login(newUser);
                 }
               } catch (err) {
                 console.error(err);
