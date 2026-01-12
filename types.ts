@@ -37,13 +37,7 @@ export interface Contact {
 
 export type ListingStatus = 'New' | 'Active' | 'Under Contract' | 'Sold';
 
-export interface AIScore {
-  score: number;
-  explanation: string;
-  risks: string[];
-  urgency: 'Low' | 'Medium' | 'High';
-  lastUpdated: string;
-}
+
 
 export interface Listing {
   id: string;
@@ -55,7 +49,7 @@ export interface Listing {
   status: ListingStatus;
   createdAt: string;
   notes?: string;
-  aiScore?: AIScore;
+
   metadata?: Record<string, string>;
 }
 
@@ -77,7 +71,7 @@ export interface Offer {
   status: OfferStatus;
   assignedTo: string;
   createdAt: string;
-  aiSummary?: string;
+
   metadata?: any;
 }
 

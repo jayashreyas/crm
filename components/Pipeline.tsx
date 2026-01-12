@@ -1,9 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { Listing, ListingStatus, User, AIScore } from '../types';
+import { Listing, ListingStatus, User } from '../types';
 // Fixed the "Cannot find name 'Edit2'" error by adding Edit2 to the lucide-react imports.
-import { MapPin, DollarSign, User as UserIcon, ArrowRightLeft, BrainCircuit, AlertTriangle, CheckCircle, Info, Loader2, FileUp, ChevronDown, ListChecks, Home, X, Plus, Layers, Save, Edit2, Trash2, CheckSquare } from 'lucide-react';
-import { AIService } from '../services/ai.service';
+import { MapPin, DollarSign, User as UserIcon, ArrowRightLeft, AlertTriangle, CheckCircle, Info, Loader2, FileUp, ChevronDown, ListChecks, Home, X, Plus, Layers, Save, Edit2, Trash2, CheckSquare } from 'lucide-react';
 import { db } from '../services/db.service';
 
 interface PipelineProps {
@@ -20,7 +19,7 @@ interface PipelineProps {
 export const Pipeline: React.FC<PipelineProps> = ({ listings, users, currentUser, onMove, onRefresh, onImport, onAddListing, onDelete }) => {
   const [selectedListing, setSelectedListing] = useState<Listing | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [isScoring, setIsScoring] = useState(false);
+
   const [editForm, setEditForm] = useState({
     address: '',
     sellerName: '',
@@ -66,25 +65,7 @@ export const Pipeline: React.FC<PipelineProps> = ({ listings, users, currentUser
     }
   };
 
-  const handleAIScore = async (listing: Listing) => {
-    setIsScoring(true);
-    try {
-      if (await db.consumeCredits(currentUser.agencyId, currentUser.id, 5)) {
-        const score = await AIService.scoreDeal(listing, listing.notes || '');
-        await db.updateListingScore(listing.id, score);
-        onRefresh();
-        if (selectedListing?.id === listing.id) {
-          setSelectedListing({ ...listing, aiScore: score });
-        }
-      } else {
-        alert("Insufficient AI Credits");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setIsScoring(false);
-    }
-  };
+
 
   const handleSavePropertyDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,10 +142,7 @@ export const Pipeline: React.FC<PipelineProps> = ({ listings, users, currentUser
             </div>
           )}
         </div>
-        <div className="flex items-center gap-2 bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100">
-          <BrainCircuit className="w-4 h-4 text-indigo-600" />
-          <span className="text-xs font-black text-indigo-700 uppercase tracking-widest">AI Decision Support Active</span>
-        </div>
+
       </div>
 
       <div className="flex-1 flex gap-4 overflow-x-auto pb-4 custom-scrollbar">
@@ -198,16 +176,7 @@ export const Pipeline: React.FC<PipelineProps> = ({ listings, users, currentUser
                     <CheckSquare className="w-3 h-3 text-white" />
                   </div>
 
-                  {listing.aiScore && (
-                    <div className="absolute top-4 right-4 flex items-center gap-1">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-[10px] font-black border ${listing.aiScore.score > 80 ? 'bg-emerald-50 text-emerald-600 border-emerald-100' :
-                        listing.aiScore.score > 50 ? 'bg-amber-50 text-amber-600 border-amber-100' :
-                          'bg-red-50 text-red-600 border-red-100'
-                        }`}>
-                        {listing.aiScore.score}
-                      </div>
-                    </div>
-                  )}
+
 
                   <div className="flex justify-between items-start mb-2 pr-10 pl-8">
                     <p className="font-bold text-slate-800 text-sm leading-tight line-clamp-2">{listing.address}</p>
@@ -348,50 +317,7 @@ export const Pipeline: React.FC<PipelineProps> = ({ listings, users, currentUser
               </div>
             </div>
 
-            {/* AI Insights Segment */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-black text-slate-800 uppercase text-xs tracking-widest flex items-center gap-2">
-                  <BrainCircuit className="w-4 h-4 text-indigo-600" />
-                  AI Decision Support
-                </h4>
-                <button
-                  onClick={() => handleAIScore(selectedListing)}
-                  disabled={isScoring}
-                  className="flex items-center gap-2 text-[10px] font-black text-indigo-600 hover:text-indigo-800 disabled:opacity-50"
-                >
-                  {isScoring ? <Loader2 className="w-3 h-3 animate-spin" /> : <ChevronDown className="w-3 h-3" />}
-                  Refresh Analysis
-                </button>
-              </div>
 
-              {selectedListing.aiScore ? (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="p-6 bg-indigo-50/50 rounded-3xl border border-indigo-100 text-center">
-                      <p className="text-[10px] font-black text-indigo-400 uppercase tracking-widest mb-1">Deal Score</p>
-                      <div className="text-4xl font-black text-indigo-700">{selectedListing.aiScore.score}</div>
-                    </div>
-                    <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 text-center">
-                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Priority</p>
-                      <div className="text-sm font-black text-slate-700 uppercase">{selectedListing.aiScore.urgency}</div>
-                    </div>
-                  </div>
-                  <div className="p-5 bg-white border border-slate-100 rounded-2xl shadow-sm">
-                    <p className="text-sm text-slate-700 leading-relaxed italic">"{selectedListing.aiScore.explanation}"</p>
-                  </div>
-                </div>
-              ) : (
-                <div className="p-10 text-center bg-slate-50 rounded-3xl border border-dashed border-slate-200">
-                  <button
-                    onClick={() => handleAIScore(selectedListing)}
-                    className="px-6 py-2.5 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-lg shadow-indigo-100"
-                  >
-                    Generate Insights (5 Credits)
-                  </button>
-                </div>
-              )}
-            </div>
 
             {/* RAW DATA MODULE - Show Every Detail */}
             <div className="space-y-4">

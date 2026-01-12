@@ -6,26 +6,17 @@ import {
   HandCoins,
   Calendar,
   DollarSign,
-  BrainCircuit,
-  Loader2,
-  ShieldCheck,
-  Clock,
-  FileText,
-  Send,
   UserCheck,
   MapPin,
-  Zap,
   ArrowRight,
   MoreHorizontal,
   X,
   Save,
   Layers,
-  ListChecks,
-  CheckCircle2,
-  AlertCircle,
-  Sparkles
+  ListChecks
+
 } from 'lucide-react';
-import { AIService } from '../services/ai.service';
+
 import { db } from '../services/db.service';
 
 interface OffersProps {
@@ -37,12 +28,11 @@ interface OffersProps {
   onImport: () => void;
   onRefresh: () => void;
   onAddOffer: () => void;
-  onPDFUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
-  isPdfAnalyzing?: boolean;
+
 }
 
-export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer, onPDFUpload, isPdfAnalyzing }) => {
-  const [summarizingId, setSummarizingId] = useState<string | null>(null);
+export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer }) => {
+
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
 
   // Form state for editing
@@ -67,32 +57,7 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
     }
   };
 
-  const handleAISummary = async (e: React.MouseEvent, offer: Offer) => {
-    e.stopPropagation();
-    setSummarizingId(offer.id);
-    try {
-      if (await db.consumeCredits(currentUser.agencyId, currentUser.id, 2)) {
-        const listing = listings.find(l => l.id === offer.listingId);
-        // listing can be undefined, AI service should handle it or we pass a fallback
-        if (listing || offer.metadata?.propertyAddress) {
-          // Temporarily mock listing object if missing but address exists
-          const targetListing = listing || { address: offer.metadata?.propertyAddress, price: 0 } as Listing;
-          const summary = await AIService.summarizeOffer(offer, targetListing);
-          await db.updateOfferSummary(offer.id, summary);
-          onRefresh();
-          if (selectedOffer?.id === offer.id) {
-            setSelectedOffer({ ...offer, aiSummary: summary });
-          }
-        }
-      } else {
-        alert("Insufficient AI Credits");
-      }
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setSummarizingId(null);
-    }
-  };
+
 
   const handleSaveOfferDetails = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -133,27 +98,6 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
         </div>
         <div className="flex items-center gap-3">
           <button type="button" onClick={onImport} className="px-6 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs">Import Negotiations</button>
-
-          <label className={`px-6 py-2.5 border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold rounded-2xl hover:bg-indigo-100 transition-all text-xs cursor-pointer flex items-center gap-2 ${isPdfAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}>
-            <input
-              type="file"
-              accept=".pdf"
-              onChange={onPDFUpload}
-              className="hidden"
-              disabled={isPdfAnalyzing}
-            />
-            {isPdfAnalyzing ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Analyzing PDF...
-              </>
-            ) : (
-              <>
-                <FileText className="w-4 h-4" />
-                Upload PDF Offer
-              </>
-            )}
-          </label>
 
           <button type="button" onClick={onAddOffer} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-xs uppercase tracking-widest">
             <Plus className="w-4 h-4" /> New Offer
@@ -389,29 +333,7 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
               </div>
             </div>
 
-            {/* AI Summary Module */}
-            <div className="bg-gradient-to-br from-indigo-50 to-white p-6 rounded-3xl border border-indigo-100 shadow-sm space-y-4">
-              <div className="flex items-center justify-between">
-                <h4 className="font-bold text-indigo-900 text-xs uppercase tracking-widest flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-indigo-600" />
-                  AI Deal Audit
-                </h4>
-                <button
-                  onClick={(e) => handleAISummary(e, selectedOffer)}
-                  disabled={summarizingId === selectedOffer.id}
-                  className="flex items-center gap-2 text-[9px] font-black text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded-lg disabled:opacity-50 uppercase tracking-widest transition-all shadow-sm shadow-indigo-200"
-                >
-                  {summarizingId === selectedOffer.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Zap className="w-3 h-3" />}
-                  Audit (2 Credits)
-                </button>
-              </div>
 
-              <div className="p-4 bg-white/60 rounded-xl border border-indigo-50 relative overflow-hidden">
-                <p className="text-xs text-slate-600 font-medium leading-relaxed">
-                  {selectedOffer.aiSummary || "Run an AI audit to identify risks, leverage points, and summary for this offer."}
-                </p>
-              </div>
-            </div>
           </div>
 
           <div className="p-6 border-t bg-white shrink-0 flex gap-3">
