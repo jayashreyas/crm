@@ -138,22 +138,28 @@ export class AIService {
         } else if (targetType === 'listing') {
           const today = new Date().toISOString().split('T')[0];
           prompt = `Analyze this Real Estate data and map it to a Listing object.
-            Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string).
+            Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string), metadata (object).
             Current Date: ${today}
             
-            Rules:
-            - "address": combine street, city, state zip.
-            - "price": parse currency string to number.
-            - "status": CRITICAL LOGIC - PRIORITY ORDER:
-               1. IF "Settlement Date" / "Closing Date" exists:
-                  - Date is in PAST -> "Sold"
-                  - Date is in FUTURE -> "Under Contract"
-               2. IF explicit Status column exists:
-                  - "Sold", "Closed", "Settled" -> "Sold"
-                  - "Pending", "Under Contract", "Option", "Escrow" -> "Under Contract"
-                  - "Active", "Listed", "New", "Available" -> "Active"
-               3. Default -> "New"
-            - "notes": Include Settlement Date if found, MLS #, or original status.
+            Column Mappings:
+            - Address: Combine "PropertyAddressFormatted", "PropertyCityState", "Zipcode"
+            - Seller: "OwnerNames" (or "OwnerFirstName" + "OwnerLastName")
+            - Price: "SaleAmt" (if 0 or empty, check "AnnualTax" or "TotalTotalAsmt" as fallback guess, else 0)
+            - Status: 
+               1. "SettleDate" or "DeedRecordDate" present? 
+                  - Date < ${today} -> "Sold"
+                  - Date > ${today} -> "Under Contract"
+               2. Else -> "New"
+            
+            Metadata Extraction (Put these in 'metadata' keys):
+            - bed: "Bedrooms"
+            - bath: "Baths"
+            - sqft: "BldgSqFtTotal"
+            - year: "YearBuilt"
+            - lot: "LotSqFt" or "LotAcres"
+            - taxId: "TaxID"
+            - mls: "MLS Number"
+            - desc: "CountyBldgDesc"
             `;
           expectedSchema = {
             type: Type.ARRAY,
@@ -164,7 +170,18 @@ export class AIService {
                 sellerName: { type: Type.STRING },
                 price: { type: Type.NUMBER },
                 status: { type: Type.STRING, enum: ['Active', 'Under Contract', 'Sold', 'New'] },
-                notes: { type: Type.STRING }
+                notes: { type: Type.STRING },
+                metadata: {
+                  type: Type.OBJECT,
+                  properties: {
+                    bed: { type: Type.STRING },
+                    sqft: { type: Type.STRING },
+                    year: { type: Type.STRING },
+                    lot: { type: Type.STRING },
+                    taxId: { type: Type.STRING },
+                    mls: { type: Type.STRING }
+                  }
+                }
               }
             }
           };
