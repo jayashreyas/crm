@@ -1371,6 +1371,190 @@ const App: React.FC = () => {
           </div>
         )}
 
+        {/* PDF Extraction Preview Modal */}
+        {showPdfPreview && extractedOfferData && (
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div className="bg-white w-full max-w-4xl max-h-[90vh] rounded-[2.5rem] shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+              <div className="p-8 border-b bg-slate-50 flex items-center justify-between shrink-0">
+                <div>
+                  <h2 className="text-2xl font-black text-slate-900 tracking-tighter flex items-center gap-3">
+                    <Sparkles className="w-6 h-6 text-indigo-600" />
+                    AI Offer Extraction
+                  </h2>
+                  <p className="text-slate-500 font-bold text-xs mt-1">Review and verify the extracted data below.</p>
+                </div>
+                <button onClick={() => { setShowPdfPreview(false); setExtractedOfferData(null); }} className="p-2 hover:bg-slate-200 rounded-full transition-colors">
+                  <X className="w-6 h-6 text-slate-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar">
+                <form id="extracted-offer-form" onSubmit={async (e) => {
+                  e.preventDefault();
+                  if (!currentUser) return;
+                  if (!hasRequiredFields(extractedOfferData)) {
+                    alert("Please fill in all required fields (marked *).");
+                    return;
+                  }
+
+                  const offer: Offer = {
+                    id: crypto.randomUUID(),
+                    listingId: newOffer.listingId, // User must select listing
+                    buyerName: extractedOfferData.buyerName?.value || '',
+                    price: extractedOfferData.offerPrice?.value || 0,
+                    earnestMoney: extractedOfferData.earnestMoney?.value || 0,
+                    downPayment: extractedOfferData.downPayment?.value || 0,
+                    financingStrategy: extractedOfferData.financing?.value || 'Conventional',
+                    closingDate: extractedOfferData.closingDate?.value || '',
+                    inspectionPeriod: extractedOfferData.inspectionPeriod?.value ? String(extractedOfferData.inspectionPeriod.value) : '10',
+                    contingencies: extractedOfferData.contingencies?.value || [],
+                    status: 'Offer Sent',
+                    date: new Date().toISOString(),
+                    assignedTo: currentUser.id,
+                    aiSummary: '',
+                    metadata: extractedOfferData._metadata // Save audit trail
+                  };
+
+                  await db.saveOffer(offer, currentUser.id);
+                  await db.logActivity(currentUser.agencyId, currentUser.id, 'captured AI-extracted offer from PDF', offer.buyerName);
+
+                  setShowPdfPreview(false);
+                  setExtractedOfferData(null);
+                  loadData(currentUser);
+                  alert("Offer saved successfully!");
+                }} className="space-y-8">
+
+                  {/* Confidence Legend */}
+                  <div className="flex items-center gap-4 bg-yellow-50 p-4 rounded-2xl border border-yellow-100 text-xs font-bold text-yellow-800">
+                    <AlertTriangle className="w-4 h-4 text-yellow-600" />
+                    <span>Fields highlighted in yellow have low confidence ({'<'}70%). Please verify with the original PDF.</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-8">
+                    {/* Column 1: Core Details */}
+                    <div className="space-y-6">
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Buyer Name *</label>
+                        <input
+                          required
+                          className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.buyerName) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                          value={extractedOfferData.buyerName?.value || ''}
+                          onChange={e => setExtractedOfferData({ ...extractedOfferData, buyerName: { ...extractedOfferData.buyerName, value: e.target.value } })}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Property Address (Verified)</label>
+                        <div className={`w-full px-5 py-4 border-2 rounded-2xl font-bold text-sm bg-slate-50 border-slate-100 text-slate-500`}>
+                          {/* For MVP we force them to link manually or auto-match if possible. Here we show what AI found. */}
+                          {extractedOfferData.propertyAddress?.value || "Address not found in PDF"}
+                        </div>
+                        <p className="text-[10px] text-indigo-500 font-bold ml-1 mt-1">Select the matching listing below to link this offer:</p>
+                        <select
+                          required
+                          className="w-full px-5 py-4 bg-white border-2 border-indigo-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm appearance-none text-indigo-900"
+                          value={newOffer.listingId}
+                          onChange={e => setNewOffer({ ...newOffer, listingId: e.target.value })}
+                        >
+                          <option value="">-- Select Listing to Attach Offer --</option>
+                          {listings.map(l => (
+                            <option key={l.id} value={l.id}>{l.address} ({l.status})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Offer Price ($) *</label>
+                          <input
+                            required
+                            type="number"
+                            className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.offerPrice) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                            value={extractedOfferData.offerPrice?.value || ''}
+                            onChange={e => setExtractedOfferData({ ...extractedOfferData, offerPrice: { ...extractedOfferData.offerPrice, value: parseFloat(e.target.value) } })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Earnest Money ($)</label>
+                          <input
+                            type="number"
+                            className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.earnestMoney) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                            value={extractedOfferData.earnestMoney?.value || ''}
+                            onChange={e => setExtractedOfferData({ ...extractedOfferData, earnestMoney: { ...extractedOfferData.earnestMoney, value: parseFloat(e.target.value) } })}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Column 2: Terms & Dates */}
+                    <div className="space-y-6">
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Financing</label>
+                          <input
+                            className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.financing) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                            value={extractedOfferData.financing?.value || ''}
+                            onChange={e => setExtractedOfferData({ ...extractedOfferData, financing: { ...extractedOfferData.financing, value: e.target.value } })}
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Inspection (Days)</label>
+                          <input
+                            className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.inspectionPeriod) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                            value={extractedOfferData.inspectionPeriod?.value || ''}
+                            onChange={e => setExtractedOfferData({ ...extractedOfferData, inspectionPeriod: { ...extractedOfferData.inspectionPeriod, value: e.target.value } })}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Closing Date</label>
+                        <input
+                          type="date"
+                          className={`w-full px-5 py-4 border-2 rounded-2xl focus:ring-4 outline-none font-bold text-sm ${isLowConfidence(extractedOfferData.closingDate) ? 'bg-yellow-50 border-yellow-200 focus:ring-yellow-100' : 'bg-slate-50 border-slate-100 focus:ring-indigo-100'}`}
+                          value={extractedOfferData.closingDate?.value || ''}
+                          onChange={e => setExtractedOfferData({ ...extractedOfferData, closingDate: { ...extractedOfferData.closingDate, value: e.target.value } })}
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Contingencies</label>
+                        <div className="flex flex-wrap gap-2">
+                          {['Inspection', 'Appraisal', 'Financing', 'Sale of Home'].map(c => {
+                            const isSelected = (extractedOfferData.contingencies?.value || []).includes(c);
+                            return (
+                              <button
+                                key={c}
+                                type="button"
+                                onClick={() => {
+                                  const current = extractedOfferData.contingencies?.value || [];
+                                  const updated = current.includes(c) ? current.filter((i: string) => i !== c) : [...current, c];
+                                  setExtractedOfferData({ ...extractedOfferData, contingencies: { ...extractedOfferData.contingencies, value: updated } });
+                                }}
+                                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wide border transition-all ${isSelected ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-slate-100 text-slate-400 border-slate-200'}`}
+                              >
+                                {c}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-8 border-t flex gap-4">
+                    <button type="button" onClick={() => { setShowPdfPreview(false); setExtractedOfferData(null); }} className="flex-1 py-5 text-slate-500 font-black uppercase tracking-widest text-xs hover:bg-slate-50 rounded-2xl transition-all">Cancel</button>
+                    <button type="submit" disabled={!newOffer.listingId} className="flex-[2] py-5 bg-indigo-600 text-white font-black uppercase tracking-[0.2em] text-xs rounded-[1.5rem] shadow-2xl hover:bg-indigo-700 transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed">
+                      <Save className="w-4 h-4" />
+                      {newOffer.listingId ? "Verify & Create Offer" : "Select Listing First"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Use a unique key for each import type to ensure the modal state is completely destroyed/recreated when switching sections */}
         {isImportModalOpen && (
           <CSVImportModal
