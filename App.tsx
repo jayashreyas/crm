@@ -135,6 +135,73 @@ const App: React.FC = () => {
     }
     setIsLookingUp(false);
   };
+
+  // PDF Offer Upload State
+  const [isPdfAnalyzing, setIsPdfAnalyzing] = useState(false);
+  const [extractedOfferData, setExtractedOfferData] = useState<any>(null);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+
+  const handlePDFUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    if (file.type !== 'application/pdf') {
+      alert('Please upload a PDF file');
+      return;
+    }
+
+    if (file.size > 20 * 1024 * 1024) {
+      alert('PDF file too large. Maximum size is 20MB.');
+      return;
+    }
+
+    setIsPdfAnalyzing(true);
+
+    try {
+      // Convert to base64
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        const base64 = e.target?.result as string;
+        const base64Data = base64.split(',')[1]; // Remove data:application/pdf;base64, prefix
+
+        const result = await AIService.analyzePDF(base64Data, file.name);
+
+        if (result.success && result.data) {
+          setExtractedOfferData(result.data);
+          setShowPdfPreview(true);
+        } else {
+          alert(result.error || 'Could not analyze PDF');
+        }
+        setIsPdfAnalyzing(false);
+      };
+      reader.onerror = () => {
+        alert('Error reading PDF file');
+        setIsPdfAnalyzing(false);
+      };
+      reader.readAsDataURL(file);
+    } catch (error) {
+      console.error('PDF upload error:', error);
+      alert('Error uploading PDF');
+      setIsPdfAnalyzing(false);
+    }
+
+    // Reset file input
+    event.target.value = '';
+  };
+
+  const getFieldConfidence = (field: any) => {
+    return field?.confidence || 0;
+  };
+
+  const isLowConfidence = (field: any) => {
+    return getFieldConfidence(field) < 0.7;
+  };
+
+  const hasRequiredFields = (data: any) => {
+    const required = ['buyerName', 'propertyAddress', 'offerPrice'];
+    return required.every(field => data[field]?.value);
+  };
+
   const [loading, setLoading] = useState(false);
 
   // ... (existing state)

@@ -97,6 +97,158 @@ export class AIService {
       return "AI Service Unavailable.";
     }
   }
+
+  static async analyzePDF(fileBase64: string, fileName: string): Promise<{ success: boolean; data?: any; error?: string }> {
+    const ai = getAIClient();
+    if (!ai) return { success: false, error: "API Key Missing. Add VITE_GEMINI_API_KEY to configurations." };
+
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.0-flash-exp",
+        contents: [{
+          parts: [
+            {
+              inlineData: {
+                mimeType: "application/pdf",
+                data: fileBase64
+              }
+            },
+            {
+              text: `Analyze this real estate purchase offer/agreement PDF and extract structured data.
+              
+              For each field, provide:
+              1. The extracted value
+              2. A confidence score (0.0 to 1.0) indicating extraction certainty
+              
+              Extract the following fields:
+              - buyerName: Full name of the buyer(s)
+              - propertyAddress: Complete property address
+              - offerPrice: Purchase price amount (number only, no currency symbols)
+              - earnestMoney: Earnest money deposit amount
+              - downPayment: Down payment amount or percentage
+              - financing: Type of financing (Cash, Conventional, FHA, VA, etc.)
+              - closingDate: Proposed closing date
+              - inspectionPeriod: Inspection period in days
+              - contingencies: List of contingencies (Inspection, Appraisal, Financing, etc.)
+              - expirationDate: Offer expiration date
+              
+              Return confidence scores based on:
+              - 1.0: Clearly printed, unambiguous text
+              - 0.7-0.9: Readable but may have formatting issues
+              - 0.4-0.6: Partially legible or ambiguous
+              - 0.0-0.3: Very unclear or missing
+              
+              If a field is not found, return null for value and 0.0 for confidence.`
+            }
+          ]
+        }],
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              buyerName: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              propertyAddress: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              offerPrice: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.NUMBER },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              earnestMoney: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.NUMBER },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              downPayment: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              financing: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              closingDate: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              inspectionPeriod: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              contingencies: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.ARRAY, items: { type: Type.STRING } },
+                  confidence: { type: Type.NUMBER }
+                }
+              },
+              expirationDate: {
+                type: Type.OBJECT,
+                properties: {
+                  value: { type: Type.STRING },
+                  confidence: { type: Type.NUMBER }
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const text = response.text;
+      if (!text) return { success: false, error: "AI returned no data." };
+
+      const extractedData = JSON.parse(text);
+
+      // Add metadata for audit trail
+      return {
+        success: true,
+        data: {
+          ...extractedData,
+          _metadata: {
+            fileName,
+            aiModelUsed: "gemini-2.0-flash-exp",
+            extractionTimestamp: new Date().toISOString()
+          }
+        }
+      };
+    } catch (e: any) {
+      console.error("PDF Analysis Error:", e);
+      let msg = "Could not analyze PDF.";
+      if (e.message?.includes("429")) msg = "Daily AI Quota Exceeded. Try again tomorrow or upgrade API key.";
+      if (e.message?.includes("403")) msg = "API Key Invalid or unauthorized.";
+      if (e.message?.includes("413")) msg = "PDF file too large. Maximum size is 20MB.";
+      return { success: false, error: msg };
+    }
+  }
+
   static async lookupProperty(address: string): Promise<{ success: boolean; data?: any; error?: string }> {
     const ai = getAIClient();
     if (!ai) return { success: false, error: "API Key Missing. Add VITE_GEMINI_API_KEY to configurations." };

@@ -36,9 +36,11 @@ interface OffersProps {
   onImport: () => void;
   onRefresh: () => void;
   onAddOffer: () => void;
+  onPDFUpload: (event: React.ChangeEvent<HTMLInputElement>) => void;
+  isPdfAnalyzing?: boolean;
 }
 
-export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer }) => {
+export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer, onPDFUpload, isPdfAnalyzing }) => {
   const [summarizingId, setSummarizingId] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
 
@@ -123,6 +125,28 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
         </div>
         <div className="flex items-center gap-3">
           <button type="button" onClick={onImport} className="px-6 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs">Import Negotiations</button>
+
+          <label className={`px-6 py-2.5 border-2 border-indigo-200 bg-indigo-50 text-indigo-700 font-bold rounded-2xl hover:bg-indigo-100 transition-all text-xs cursor-pointer flex items-center gap-2 ${isPdfAnalyzing ? 'opacity-50 cursor-not-allowed' : ''}`}>
+            <input
+              type="file"
+              accept=".pdf"
+              onChange={onPDFUpload}
+              className="hidden"
+              disabled={isPdfAnalyzing}
+            />
+            {isPdfAnalyzing ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Analyzing PDF...
+              </>
+            ) : (
+              <>
+                <FileText className="w-4 h-4" />
+                Upload PDF Offer
+              </>
+            )}
+          </label>
+
           <button type="button" onClick={onAddOffer} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-xs uppercase tracking-widest">
             <Plus className="w-4 h-4" /> New Offer
           </button>
@@ -232,8 +256,8 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
                     key={stage}
                     onClick={() => setEditForm({ ...editForm, status: stage })}
                     className={`px-3 py-2.5 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${editForm.status === stage
-                        ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
-                        : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200'
+                      ? 'bg-slate-900 text-white border-slate-900 shadow-lg'
+                      : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200'
                       }`}
                   >
                     {stage}
@@ -319,8 +343,8 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
                     type="button"
                     onClick={() => toggleContingency(c)}
                     className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest border-2 transition-all ${(editForm.contingencies || []).includes(c)
-                        ? 'bg-indigo-600 text-white border-indigo-600'
-                        : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200'
+                      ? 'bg-indigo-600 text-white border-indigo-600'
+                      : 'bg-white text-slate-400 border-slate-100 hover:border-indigo-200'
                       }`}
                   >
                     {c}
