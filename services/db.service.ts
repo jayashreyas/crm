@@ -262,7 +262,7 @@ class DBService {
       contingencies: offer.contingencies,
       closing_date: offer.closingDate,
       status: offer.status,
-      assigned_to: offer.assignedTo,
+      // assigned_to: offer.assignedTo, // Removed as column missing in DB
       created_at: offer.createdAt,
       metadata: offer.metadata || {}
     };

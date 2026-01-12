@@ -608,8 +608,15 @@ const App: React.FC = () => {
               };
               return db.saveOffer(offer, currentUser.id);
             });
-            await Promise.all(promises);
-            await loadData(currentUser);
+
+            try {
+              await Promise.all(promises);
+              await loadData(currentUser);
+              alert("Offers imported successfully!");
+            } catch (err: any) {
+              console.error("Import failed:", err);
+              alert(`Import failed: ${err.message || JSON.stringify(err)}`);
+            }
           }
         };
       case 'tasks':
