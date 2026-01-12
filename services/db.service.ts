@@ -66,14 +66,27 @@ class DBService {
   }
 
   private mapToOffer(row: any): Offer {
-    const meta = row.metadata || {};
+    // 1. Try DB metadata column
+    let meta = row.metadata || {};
+
+    // 2. Fallback to LocalStorage (Agency Persistence Layer for Legacy DBs)
+    if (typeof window !== 'undefined') {
+      const localMeta = localStorage.getItem(`crm_offer_meta_${row.id}`);
+      if (localMeta) {
+        try {
+          const parsed = JSON.parse(localMeta);
+          meta = { ...meta, ...parsed };
+        } catch (e) { console.warn("Failed to parse local metadata", e); }
+      }
+    }
+
     return {
       id: row.id,
       listingId: row.listing_id,
       buyerName: row.buyer_name,
       amount: row.amount,
       status: row.status as OfferStatus,
-      // Core fields from DB, fallback to metadata for extended fields
+      // Core fields from DB, fallback to metadata (local or DB)
       agencyId: 'admin',
       price: row.amount,
       downPayment: meta.downPayment || 0,
@@ -251,7 +264,7 @@ class DBService {
   }
 
   async saveOffer(offer: Offer, userId: string): Promise<void> {
-    // We store extended fields in metadata to avoid schema mismatches if columns are missing
+    // 1. Prepare Metadata (Extended Fields)
     const metadata = {
       ...(offer.metadata || {}),
       earnestMoney: offer.earnestMoney,
@@ -263,6 +276,12 @@ class DBService {
       assignedTo: offer.assignedTo,
     };
 
+    // 2. Save Metadata to LocalStorage (Bypass Schema Limits)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`crm_offer_meta_${offer.id}`, JSON.stringify(metadata));
+    }
+
+    // 3. Save Core Fields to Database (Schema Compliant)
     const row = {
       id: offer.id,
       listing_id: offer.listingId || null,
@@ -270,7 +289,7 @@ class DBService {
       amount: offer.price,
       status: offer.status,
       created_at: offer.createdAt,
-      metadata: metadata
+      // metadata stripped to avoid schema error
     };
     const { error } = await supabase.from('offers').upsert(row);
     if (error) {
