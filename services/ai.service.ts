@@ -312,11 +312,11 @@ export class AIService {
       for (let i = 0; i < csvData.length; i += CHUNK_SIZE) {
         const chunk = csvData.slice(i, i + CHUNK_SIZE);
 
-        let prompt = "";
-        let expectedSchema = {};
+        let promptText = "";
+        let expectedSchema: any = {};
 
         if (targetType === 'contact') {
-          prompt = `Analyze this CSV data and map it to a Contact object.
+          promptText = `Analyze this CSV data and map it to a Contact object.
             Target Fields: name (string), email (string), phone (string), notes (string), tags (string[]).
             
             Rules:
@@ -340,7 +340,7 @@ export class AIService {
           };
         } else if (targetType === 'listing') {
           const today = new Date().toISOString().split('T')[0];
-          prompt = `Analyze this Real Estate data and map it to a Listing object.
+          promptText = `Analyze this Real Estate data and map it to a Listing object.
             Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string), metadata (object).
             Current Date: ${today}
             
@@ -388,11 +388,55 @@ export class AIService {
               }
             }
           };
+        } else if (targetType === 'offer') {
+          const today = new Date().toISOString().split('T')[0];
+          promptText = `Analyze this CSV data and map it to an Offer object.
+            Target Fields: buyerName (string), price (number), earnestMoney (number), financing ('Cash'|'Conventional'|'FHA'|'VA'), closingDate (string), contingencies (string[]), metadata (object).
+            Current Date: ${today}
+            
+            Column Mappings (Specific to user data):
+            - buyerName: "Buyer Name"
+            - price: "Purchase Price" (number only)
+            - earnestMoney: "Earnest Money" (number only)
+            - financing: "Financing Type" mapping to enum
+            - closingDate: "Settlement Date" or "Closing Date" (ISO format)
+            
+            Metadata Extraction (Store these in 'metadata' keys):
+            - sellerName: "Seller Name"
+            - address: Combine "Property Address", "City", "State", "ZIP"
+            - lender: "Lender"
+            - buyerAgent: "Buyer Agent"
+            - sellerAgent: "Seller Agent"
+            `;
+          expectedSchema = {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                buyerName: { type: Type.STRING },
+                price: { type: Type.NUMBER },
+                earnestMoney: { type: Type.NUMBER },
+                financing: { type: Type.STRING, enum: ['Cash', 'Conventional', 'FHA', 'VA'] },
+                closingDate: { type: Type.STRING },
+                contingencies: { type: Type.ARRAY, items: { type: Type.STRING } },
+                metadata: {
+                  type: Type.OBJECT,
+                  properties: {
+                    sellerName: { type: Type.STRING },
+                    address: { type: Type.STRING },
+                    lender: { type: Type.STRING },
+                    buyerAgent: { type: Type.STRING },
+                    sellerAgent: { type: Type.STRING }
+                  }
+                }
+              }
+            }
+          };
         }
 
         const response = await ai.models.generateContent({
           model: "gemini-2.0-flash-exp",
-          contents: `${prompt}
+          contents: `${promptText}
             
             Input Data (JSON chunk):
             ${JSON.stringify(chunk)}

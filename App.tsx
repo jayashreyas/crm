@@ -542,29 +542,74 @@ const App: React.FC = () => {
       case 'offers':
         return {
           title: 'Offer Negotiations',
-          expectedHeaders: ['Buyer', 'Amount', 'Property'],
-          onImport: (data: any[]) => {
+          expectedHeaders: ['Buyer', 'Amount', 'Property', 'Financing', 'Closing Date'],
+          fieldAliases: {
+            'Buyer': ['Buyer Name', 'Purchaser', 'Offeror', 'Client'],
+            'Amount': ['Purchase Price', 'Offer Price', 'Sale Price', 'Price'],
+            'Property': ['Property Address', 'Address', 'Building', 'Location'],
+            'Financing': ['Financing Type', 'Loan Type', 'Method'],
+            'Closing Date': ['Settlement Date', 'Close Date', 'Target Date']
+          },
+          onImport: async (data: any[]) => {
             if (!currentUser) return;
-            data.forEach(item => {
+
+            // Direct Mapping Approach (Manual, Robust) as requested
+            const promises = data.map(item => {
+              // Helper to find value case-insensitively
+              const getVal = (keys: string[]) => {
+                for (const key of keys) {
+                  // Check exact match first
+                  if (item[key] !== undefined) return item[key];
+                  // Check lower case match
+                  const lowerKey = Object.keys(item).find(k => k.toLowerCase() === key.toLowerCase());
+                  if (lowerKey) return item[lowerKey];
+                }
+                return null;
+              };
+
+              // Map specific fields
+              const buyerName = getVal(['Buyer Name', 'Buyer', 'Purchaser']) || 'Unknown Buyer';
+              const priceVal = getVal(['Purchase Price', 'Price', 'Sale Price', 'Amount']);
+              const earnestVal = getVal(['Earnest Money', 'Deposit']);
+              const financingVal = getVal(['Financing Type', 'Financing', 'Loan Type']);
+              const dateVal = getVal(['Settlement Date', 'Closing Date', 'Close Date']);
+              const sellerName = getVal(['Seller Name', 'Seller']);
+
+              // Build clean address from parts if available
+              const addr = getVal(['Property Address', 'Address', 'Property']);
+              const city = getVal(['City']);
+              const state = getVal(['State']);
+              const zip = getVal(['ZIP', 'Zipcode']);
+              const fullAddress = city && state ? `${addr}, ${city}, ${state} ${zip}` : addr;
+
               const offer: Offer = {
                 id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
-                listingId: '',
-                buyerName: item.buyer || 'Unknown Buyer',
-                price: parseFloat(String(item.amount).replace(/[^0-9.]/g, '')) || 0,
+                listingId: '', // Standalone offer for now
+                buyerName: String(buyerName),
+                price: parseFloat(String(priceVal || '0').replace(/[^0-9.]/g, '')) || 0,
                 downPayment: 0,
-                earnestMoney: 0,
-                financing: 'Conventional',
+                earnestMoney: parseFloat(String(earnestVal || '0').replace(/[^0-9.]/g, '')) || 0,
+                financing: (String(financingVal || 'Conventional')) as any,
                 inspectionPeriod: 10,
                 contingencies: ['Inspection'],
-                closingDate: new Date().toISOString(),
+                closingDate: dateVal ? new Date(dateVal).toISOString() : new Date().toISOString(),
                 status: 'Draft',
                 assignedTo: currentUser.id,
-                createdAt: new Date().toISOString()
+                createdAt: new Date().toISOString(),
+                metadata: {
+                  sellerName: sellerName,
+                  propertyAddress: fullAddress,
+                  lender: getVal(['Lender']),
+                  buyerAgent: getVal(['Buyer Agent']),
+                  sellerAgent: getVal(['Seller Agent']),
+                  sourceRows: item // Keep original data just in case
+                }
               };
-              db.saveOffer(offer, currentUser.id);
+              return db.saveOffer(offer, currentUser.id);
             });
-            loadData(currentUser);
+            await Promise.all(promises);
+            await loadData(currentUser);
           }
         };
       case 'tasks':
