@@ -203,26 +203,44 @@ const App: React.FC = () => {
 
   const handleSaveManualListing = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser || !newListing.address) return;
+    console.log("Attempting to save manual listing...", newListing);
 
-    const listing: Listing = {
-      id: crypto.randomUUID(),
-      agencyId: currentUser.agencyId,
-      address: newListing.address,
-      sellerName: newListing.sellerName,
-      price: parseFloat(newListing.price.replace(/[^0-9.]/g, '')) || 0,
-      assignedAgent: newListing.assignedAgent || currentUser.id,
-      status: 'New',
-      createdAt: new Date().toISOString(),
-      notes: '',
-      metadata: {}
-    };
+    if (!currentUser) {
+      console.error("No current user found");
+      return;
+    }
+    if (!newListing.address) {
+      console.error("Address is missing");
+      return;
+    }
 
-    await db.saveListing(listing);
-    await db.logActivity(currentUser.agencyId, currentUser.id, 'added new property to pipeline', listing.address);
-    setIsCreateListingModalOpen(false);
-    setNewListing({ address: '', sellerName: '', price: '', assignedAgent: '' });
-    loadData(currentUser);
+    try {
+      const priceStr = String(newListing.price || '0');
+      const listing: Listing = {
+        id: crypto.randomUUID(),
+        agencyId: currentUser.agencyId,
+        address: newListing.address,
+        sellerName: newListing.sellerName,
+        price: parseFloat(priceStr.replace(/[^0-9.]/g, '')) || 0,
+        assignedAgent: newListing.assignedAgent || currentUser.id,
+        status: 'New',
+        createdAt: new Date().toISOString(),
+        notes: '',
+        metadata: {}
+      };
+
+      console.log("Saving listing payload:", listing);
+      await db.saveListing(listing);
+      await db.logActivity(currentUser.agencyId, currentUser.id, 'added new property to pipeline', listing.address);
+
+      console.log("Listing saved successfully");
+      setIsCreateListingModalOpen(false);
+      setNewListing({ address: '', sellerName: '', price: '', assignedAgent: '' });
+      await loadData(currentUser);
+    } catch (err) {
+      console.error("Error saving manual listing:", err);
+      alert("Failed to create listing. Check console for details.");
+    }
   };
 
 
