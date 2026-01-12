@@ -31,7 +31,7 @@ export const AgencyAdmin: React.FC<AgencyAdminProps> = ({ agency, users, activit
       email: formData.email,
       role: formData.role,
     } : {
-      id: `u-${Date.now()}`,
+      id: crypto.randomUUID(),
       agencyId: agency.id,
       name: formData.name,
       email: formData.email,
