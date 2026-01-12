@@ -91,7 +91,8 @@ const App: React.FC = () => {
   });
 
   const [newListing, setNewListing] = useState({
-    address: '', sellerName: '', price: '', assignedAgent: ''
+    address: '', sellerName: '', price: '', assignedAgent: '',
+    bedrooms: '', bathrooms: '', sqft: '', yearBuilt: '', notes: ''
   });
 
   const [newOffer, setNewOffer] = useState({
@@ -122,10 +123,12 @@ const App: React.FC = () => {
         ...newListing,
         price: data.price ? String(data.price) : newListing.price,
         sellerName: data.seller || newListing.sellerName || 'Unknown',
+        bedrooms: data.bed ? String(data.bed) : newListing.bedrooms,
+        bathrooms: data.bath ? String(data.bath) : newListing.bathrooms,
+        sqft: data.sqft ? String(data.sqft) : newListing.sqft,
+        yearBuilt: data.year ? String(data.year) : newListing.yearBuilt,
       });
-      (newListing as any)._tempMetadata = {
-        bed: data.bed, bath: data.bath, sqft: data.sqft, year: data.year, link: data.link
-      };
+      (newListing as any)._tempMetadata = { link: data.link };
       alert("Auto-filled details found online!");
     } else {
       alert(result.error || "Could not find property details online.");
@@ -250,8 +253,14 @@ const App: React.FC = () => {
         assignedAgent: newListing.assignedAgent || currentUser.id,
         status: 'New',
         createdAt: new Date().toISOString(),
-        notes: '',
-        metadata: {}
+        notes: newListing.notes,
+        metadata: {
+          ...(newListing as any)._tempMetadata,
+          bed: newListing.bedrooms,
+          bath: newListing.bathrooms,
+          sqft: newListing.sqft,
+          year: newListing.yearBuilt
+        }
       };
 
       console.log("Saving listing payload:", listing);
@@ -973,6 +982,58 @@ const App: React.FC = () => {
                     value={newListing.price}
                     onChange={e => setNewListing({ ...newListing, price: e.target.value })}
                     placeholder="e.g. 1500000"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Bedrooms</label>
+                    <input
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newListing.bedrooms}
+                      onChange={e => setNewListing({ ...newListing, bedrooms: e.target.value })}
+                      placeholder="e.g. 4"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Bathrooms</label>
+                    <input
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newListing.bathrooms}
+                      onChange={e => setNewListing({ ...newListing, bathrooms: e.target.value })}
+                      placeholder="e.g. 3.5"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Square Ft</label>
+                    <input
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newListing.sqft}
+                      onChange={e => setNewListing({ ...newListing, sqft: e.target.value })}
+                      placeholder="e.g. 3200"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Year Built</label>
+                    <input
+                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                      value={newListing.yearBuilt}
+                      onChange={e => setNewListing({ ...newListing, yearBuilt: e.target.value })}
+                      placeholder="e.g. 2024"
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Internal Notes</label>
+                  <textarea
+                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm min-h-[100px]"
+                    value={newListing.notes}
+                    onChange={e => setNewListing({ ...newListing, notes: e.target.value })}
+                    placeholder="Access codes, showing instructions, private details..."
                   />
                 </div>
 
