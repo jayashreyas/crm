@@ -372,114 +372,44 @@ const App: React.FC = () => {
           },
           onImport: async (data: any[]) => {
             if (!currentUser) return;
-            // Process individually or batch? Batch is better but upsert supports array.
-            // For logic complexity (price/status deteciton), we process one by one
-            const promises = data.map(item => {
-              // 1. Enhanced Price Parsing
-              let priceVal = 0;
 
-              // Try explicit price fields first
-              const priceStr = item.price || item.cost || item.value || item.amount || '';
-              if (priceStr) {
-                // Remove currency symbols, commas, spaces
-                const cleaned = String(priceStr).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
-                priceVal = parseFloat(cleaned) || 0;
+            // Use AI to parse the Listing data
+            let processedData = data;
+            try {
+              if (data.length < 50) {
+                processedData = await AIService.parseCSV(data, 'listing');
+              }
+            } catch (e) {
+              console.error("AI Listing Parse failed", e);
+            }
+
+            const promises = processedData.map(item => {
+              // 1. Price Parsing (AI should have handled this, but safety first)
+              let priceVal = item.price;
+              if (typeof priceVal !== 'number') {
+                const priceStr = String(item.price || item.cost || item.amount || '').replace(/[$,\s]/g, '');
+                priceVal = parseFloat(priceStr) || 0;
               }
 
-              // Fallback: Search all fields for number that looks like a price (5-8 digits)
-              if (priceVal === 0) {
-                const priceKey = Object.keys(item).find(k => {
-                  const val = String(item[k]).replace(/[$,\s]/g, '');
-                  const num = parseFloat(val.replace(/[^0-9.]/g, ''));
-                  // Price likely between 10,000 and 99,999,999
-                  return num >= 10000 && num <= 99999999;
-                });
-                if (priceKey) {
-                  const cleaned = String(item[priceKey]).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
-                  priceVal = parseFloat(cleaned) || 0;
-                }
-              }
-
-              // 2. Enhanced Status Detection
-              let rawStatus = (item.status || item.stage || item.state || '').toString().trim().toLowerCase();
-
-              // PRIORITY CHECK: MLS/Tax Record Logic for Settle Date
-              // If we have a Settle Date (and it's not a generic placeholder), this is definitely a Sold property.
-              // We check this BEFORE anything else to override potentially confusing "status" fields (like "Malvern, PA")
-              const settleDateVal = item.settledate || item['settle date'] || item.closedate || item['close date'] || '';
-              const hasValidSettleDate = settleDateVal && settleDateVal.length > 5 && !isNaN(Date.parse(settleDateVal));
-
-              if (hasValidSettleDate) {
-                rawStatus = 'sold';
-              } else {
-                // Standard Logic if no Settle Date found
-
-                // If no status field, search all fields for status keywords
-                if (!rawStatus) {
-                  const statusKey = Object.keys(item).find(k =>
-                    k.toLowerCase().includes('status') ||
-                    k.toLowerCase().includes('stage') ||
-                    k.toLowerCase().includes('state')
-                  );
-                  if (statusKey) rawStatus = String(item[statusKey]).trim().toLowerCase();
-                }
-
-                // NUCLEAR OPTION: If header mapping failed, search EVERY CELL for status keywords
-                // ONLY run this if we didn't find a standard status field 
-                if (!rawStatus) {
-                  const statusKeywords = ['sold', 'closed', 'settled', 'contract', 'pending', 'escrow', 'active', 'market', 'listed', 'new', 'draft'];
-                  const statusKey = Object.keys(item).find(k => {
-                    const val = String(item[k]).toLowerCase();
-                    return statusKeywords.some(kw => val.includes(kw));
-                  });
-
-                  if (statusKey) rawStatus = String(item[statusKey]).trim().toLowerCase();
-                }
-              }
-
-              // 3. Fallback Price: Search all fields for ANY number (lowered threshold to 500)
-              if (priceVal === 0) {
-                const priceKey = Object.keys(item).find(k => {
-                  // Skip keys that we just used for status
-                  if (rawStatus && String(item[k]).toLowerCase() === rawStatus) return false;
-                  // Skip Zip codes
-                  if (k.toLowerCase().includes('zip')) return false;
-
-                  const val = String(item[k]).replace(/[$,\s]/g, '');
-                  // Check if it's a pure number string
-                  if (!/^\d+(\.\d+)?$/.test(val)) return false;
-
-                  const num = parseFloat(val);
-                  return num >= 500 && num <= 999999999;
-                });
-                if (priceKey) {
-                  const cleaned = String(item[priceKey]).replace(/[$,\s]/g, '').replace(/[^0-9.]/g, '');
-                  priceVal = parseFloat(cleaned) || 0;
-                }
-              }
-
+              // 2. Status Normalization
               let finalStatus: ListingStatus = 'New';
+              const s = (item.status || '').toLowerCase();
 
-              if (['sold', 'closed', 'settled', 'archived', 'done', 'complete'].some(k => rawStatus.includes(k))) {
-                finalStatus = 'Sold';
-              } else if (['contract', 'pending', 'option', 'escrow', 'offer', 'accepted'].some(k => rawStatus.includes(k))) {
-                finalStatus = 'Under Contract';
-              } else if (['active', 'sale', 'available', 'market', 'listed', 'open'].some(k => rawStatus.includes(k))) {
-                finalStatus = 'Active';
-              } else if (['new', 'draft', 'incoming', 'fresh'].some(k => rawStatus.includes(k))) {
-                finalStatus = 'New';
-              }
+              if (s === 'sold' || s.includes('closed') || s.includes('settled')) finalStatus = 'Sold';
+              else if (s === 'active' || s.includes('listed')) finalStatus = 'Active';
+              else if (s === 'under contract' || s.includes('pending') || s.includes('escrow')) finalStatus = 'Under Contract';
+              else if (item.settledate) finalStatus = 'Sold'; // Manual Catch for tax records
 
               const listing: Listing = {
                 id: crypto.randomUUID(),
                 agencyId: currentUser.agencyId,
-                address: item.address || item.property || item.site || item.location || 'Unknown Address',
-                sellerName: item.seller || item.owner || item.vendor || item.client || 'Unknown Seller',
+                address: item.address || 'Unknown Address',
+                sellerName: item.sellerName || item.seller || 'Unknown Seller',
                 price: priceVal,
                 assignedAgent: currentUser.id,
                 status: finalStatus,
                 createdAt: new Date().toISOString(),
-                notes: item.notes || `Imported MLS Record. MLS#: ${item.mlsnumber || item['mls number'] || 'N/A'}`,
+                notes: item.notes || '',
                 metadata: item
               };
               return db.saveListing(listing);

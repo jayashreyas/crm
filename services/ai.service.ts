@@ -132,6 +132,33 @@ export class AIService {
             }
           }
         };
+      } else if (targetType === 'listing') {
+        prompt = `Analyze this Real Estate data and map it to a Listing object.
+        Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string).
+        
+        Rules:
+        - "address": combine street, city, state zip.
+        - "price": parse currency string to number.
+        - "status": Analyze keywords!
+           - "Sold", "Closed", "Settled" -> "Sold"
+           - "Pending", "Under Contract", "Option", "Escrow" -> "Under Contract"
+           - "Active", "Listed", "New", "Available" -> "Active"
+           - If status contains "Withdrawn" or "Expired" -> "New" (for retargeting)
+        - "notes": Include MLS #, original status, or relevant details.
+        `;
+        expectedSchema = {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              address: { type: Type.STRING },
+              sellerName: { type: Type.STRING },
+              price: { type: Type.NUMBER },
+              status: { type: Type.STRING, enum: ['Active', 'Under Contract', 'Sold', 'New'] },
+              notes: { type: Type.STRING }
+            }
+          }
+        };
       }
 
       const response = await ai.models.generateContent({
