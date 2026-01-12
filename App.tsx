@@ -3,6 +3,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { User, Agency, AppView, Contact, Listing, Task, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus, Message } from './types';
 import { APP_NAME, MOCK_USERS, MOCK_AGENCIES, NAV_ITEMS } from './constants';
 import { db } from './services/db.service';
+import { AIService } from './services/ai.service';
 import { Dashboard } from './components/Dashboard';
 import { Pipeline } from './components/Pipeline';
 import { Offers } from './components/Offers';
