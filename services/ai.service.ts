@@ -102,95 +102,98 @@ export class AIService {
     if (!ai) return csvData; // Fallback to raw data if AI fails
 
     try {
-      // Take a sample of up to 5 rows to analyze structure
-      const sample = csvData.slice(0, 5);
-      const headers = Object.keys(sample[0] || {});
+      // CHUNK PROCESSING: Process entire dataset in chunks of 20 to avoid token limits
+      const CHUNK_SIZE = 20;
+      const results: any[] = [];
 
-      let prompt = "";
-      let expectedSchema = {};
+      for (let i = 0; i < csvData.length; i += CHUNK_SIZE) {
+        const chunk = csvData.slice(i, i + CHUNK_SIZE);
 
-      if (targetType === 'contact') {
-        prompt = `Analyze this CSV data and map it to a Contact object.
-        Target Fields: name (string), email (string), phone (string), notes (string), tags (string[]).
-        
-        Rules:
-        - "phone": Normalize to digits (e.g. 555-0123 -> 5550123). If multiple, pick mobile.
-        - "name": Combine First/Last if split.
-        - "tags": Infer from status/stage columns (e.g. "New Lead").
-        - "notes": Combine extra context fields.
-        `;
-        expectedSchema = {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              name: { type: Type.STRING },
-              email: { type: Type.STRING },
-              phone: { type: Type.STRING },
-              notes: { type: Type.STRING },
-              tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+        let prompt = "";
+        let expectedSchema = {};
+
+        if (targetType === 'contact') {
+          prompt = `Analyze this CSV data and map it to a Contact object.
+            Target Fields: name (string), email (string), phone (string), notes (string), tags (string[]).
+            
+            Rules:
+            - "phone": Normalize to digits (e.g. 555-0123 -> 5550123). If multiple, pick mobile.
+            - "name": Combine First/Last if split.
+            - "tags": Infer from status/stage columns (e.g. "New Lead").
+            - "notes": Combine extra context fields.
+            `;
+          expectedSchema = {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                name: { type: Type.STRING },
+                email: { type: Type.STRING },
+                phone: { type: Type.STRING },
+                notes: { type: Type.STRING },
+                tags: { type: Type.ARRAY, items: { type: Type.STRING } }
+              }
             }
-          }
-        };
-      } else if (targetType === 'listing') {
-        prompt = `Analyze this Real Estate data and map it to a Listing object.
-        Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string).
-        
-        Rules:
-        - "address": combine street, city, state zip.
-        - "price": parse currency string to number.
-        - "status": Analyze keywords!
-           - "Sold", "Closed", "Settled" -> "Sold"
-           - "Pending", "Under Contract", "Option", "Escrow" -> "Under Contract"
-           - "Active", "Listed", "New", "Available" -> "Active"
-           - If status contains "Withdrawn" or "Expired" -> "New" (for retargeting)
-        - "notes": Include MLS #, original status, or relevant details.
-        `;
-        expectedSchema = {
-          type: Type.ARRAY,
-          items: {
-            type: Type.OBJECT,
-            properties: {
-              address: { type: Type.STRING },
-              sellerName: { type: Type.STRING },
-              price: { type: Type.NUMBER },
-              status: { type: Type.STRING, enum: ['Active', 'Under Contract', 'Sold', 'New'] },
-              notes: { type: Type.STRING }
+          };
+        } else if (targetType === 'listing') {
+          const today = new Date().toISOString().split('T')[0];
+          prompt = `Analyze this Real Estate data and map it to a Listing object.
+            Target Fields: address (string), sellerName (string), price (number), status ('Active'|'Under Contract'|'Sold'|'New'), notes (string).
+            Current Date: ${today}
+            
+            Rules:
+            - "address": combine street, city, state zip.
+            - "price": parse currency string to number.
+            - "status": CRITICAL LOGIC - PRIORITY ORDER:
+               1. IF "Settlement Date" / "Closing Date" exists:
+                  - Date is in PAST -> "Sold"
+                  - Date is in FUTURE -> "Under Contract"
+               2. IF explicit Status column exists:
+                  - "Sold", "Closed", "Settled" -> "Sold"
+                  - "Pending", "Under Contract", "Option", "Escrow" -> "Under Contract"
+                  - "Active", "Listed", "New", "Available" -> "Active"
+               3. Default -> "New"
+            - "notes": Include Settlement Date if found, MLS #, or original status.
+            `;
+          expectedSchema = {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                address: { type: Type.STRING },
+                sellerName: { type: Type.STRING },
+                price: { type: Type.NUMBER },
+                status: { type: Type.STRING, enum: ['Active', 'Under Contract', 'Sold', 'New'] },
+                notes: { type: Type.STRING }
+              }
             }
+          };
+        }
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.0-flash-exp",
+          contents: `${prompt}
+            
+            Input Data (JSON chunk):
+            ${JSON.stringify(chunk)}
+            
+            Return the MAPPED array for these rows only.`,
+          config: {
+            responseMimeType: "application/json",
+            responseSchema: expectedSchema
           }
-        };
+        });
+
+        const text = response.text;
+        if (text) {
+          const parsedChunk = JSON.parse(text);
+          if (Array.isArray(parsedChunk)) {
+            results.push(...parsedChunk);
+          }
+        }
       }
 
-      const response = await ai.models.generateContent({
-        model: "gemini-2.0-flash-exp",
-        contents: `${prompt}
-        
-        Input Data (JSON sample):
-        ${JSON.stringify(sample)}
-        
-        Return the MAPPED array for these rows only.`,
-        config: {
-          responseMimeType: "application/json",
-          responseSchema: expectedSchema
-        }
-      });
-
-      const text = response.text;
-      if (!text) return csvData;
-
-      // Since we can't process the WHOLE file via LLM (token limits), 
-      // we get the MAPPING LOGIC from the LLM or just use the LLM to process chunks.
-      // For now, let's process the WHOLE data in chunks of 20 if needed, 
-      // OR better: Ask LLM for the *Mapping Strategy* (key-to-key) and apply it in code.
-      // BUT for simplicity and "Wow" factor requested by user, let's process the first batch via AI 
-      // and finding the mapping keys efficiently might be safer.
-
-      // Actually, simplest robust way: Process all data through AI in chunks if small, 
-      // or just return the AI parsed sample for now to demonstrate.
-      // Let's assume the user uploads reasonably sized files (<50 rows).
-      // We will process the INPUT data using the logic inferred.
-
-      return JSON.parse(text);
+      return results.length > 0 ? results : csvData;
 
     } catch (e) {
       console.error("AI CSV Parse Error:", e);
