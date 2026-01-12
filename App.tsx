@@ -548,10 +548,25 @@ const App: React.FC = () => {
             'Email': ['Email Address', 'E-mail', 'Contact Email'],
             'Phone': ['Mobile', 'Cell', 'Telephone', 'Ph', 'Contact Number', 'Phone Number']
           },
-          onImport: (data: any[]) => {
+          onImport: async (data: any[]) => {
             if (!currentUser) return;
-            data.forEach(item => {
-              // 1. Try explicit columns first
+
+            // Use AI to parse/map the CSV data intelligently
+            let processedData = data;
+            try {
+              // Only process first 10 rows via AI to save credits/time, then map others? 
+              // For now, let's just try to process a batch or assume the map logic holds.
+              // We'll pass the WHOLE data to AI if small (<20 rows), or just use simple logic if large.
+              // Actually, best "demo" approach: Use AI to fix the dataset.
+              if (data.length < 50) {
+                processedData = await AIService.parseCSV(data, 'contact');
+              }
+            } catch (e) {
+              console.error("AI Parse failed, falling back to manual", e);
+            }
+
+            const promises = processedData.map(async (item) => {
+              // 1. Try explicit columns first (using AI mapped keys or raw)
               let phoneVal = item.phone || item.mobile || item.cell || item.number || '';
 
               // 2. Fallback: Search keys with "phone"
@@ -564,14 +579,11 @@ const App: React.FC = () => {
                 if (phoneKey) phoneVal = item[phoneKey];
               }
 
-              // 3. Ultimate Fallback: Scan ALL values for phone-like patterns
-              // Regex: matches numbers causing at least 7 digits, optional + prefix, spaces/dashes allowd
+              // 3. Ultimate Fallback: Scan ALL values (legacy logic kept for safety)
               if (!phoneVal) {
                 const phoneRegex = /^(\+?[\d\s-]{7,})$/;
-                // We exclude values that are likely just IDs (pure digits > 15 chars) or dates
                 const potentialKey = Object.keys(item).find(k => {
                   const val = String(item[k]).trim();
-                  // Must contain some digits, not include letters (except x maybe), be reasonably long
                   return val.length > 6 && val.length < 20 && /[\d]{5,}/.test(val) && !/[a-wy-z]/i.test(val) && phoneRegex.test(val);
                 });
                 if (potentialKey) phoneVal = item[potentialKey];
@@ -583,15 +595,16 @@ const App: React.FC = () => {
                 name: item.name || 'Unknown',
                 email: item.email || '',
                 phone: phoneVal,
-                tags: [],
-                notes: '',
+                tags: item.tags || [],
+                notes: item.notes || '',
                 assignedTo: currentUser.id,
                 createdAt: new Date().toISOString(),
                 metadata: item
               };
-              db.saveContact(contact);
+              return db.saveContact(contact);
             });
-            loadData(currentUser);
+            await Promise.all(promises);
+            await loadData(currentUser);
           }
         };
     }
