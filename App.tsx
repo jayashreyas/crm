@@ -568,9 +568,9 @@ const App: React.FC = () => {
           onMove={handleMoveListing} onRefresh={() => loadData(currentUser)}
           onImport={() => handleOpenImport('listings')}
           onAddListing={() => setIsCreateListingModalOpen(true)}
-          onDelete={(ids) => {
-            db.deleteListings(ids);
-            loadData(currentUser);
+          onDelete={async (ids) => {
+            await db.deleteListings(ids);
+            await loadData(currentUser);
           }}
         />;
       case 'offers':
