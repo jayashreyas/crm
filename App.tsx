@@ -49,8 +49,10 @@ import {
   Zap,
   CheckSquare,
   UserPlus,
+  Loader,
   StickyNote,
-  Loader
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 type ImportType = 'contacts' | 'listings' | 'offers' | 'tasks';
@@ -707,6 +709,8 @@ const App: React.FC = () => {
           onUpdateStatus={handleUpdateOffer} onImport={() => handleOpenImport('offers')}
           onRefresh={() => loadData(currentUser)}
           onAddOffer={() => setIsCreateOfferModalOpen(true)}
+          onPDFUpload={handlePDFUpload}
+          isPdfAnalyzing={isPdfAnalyzing}
         />;
       case 'tasks':
         return <Tasks
@@ -1399,17 +1403,18 @@ const App: React.FC = () => {
 
                   const offer: Offer = {
                     id: crypto.randomUUID(),
+                    agencyId: currentUser.agencyId,
                     listingId: newOffer.listingId, // User must select listing
                     buyerName: extractedOfferData.buyerName?.value || '',
                     price: extractedOfferData.offerPrice?.value || 0,
                     earnestMoney: extractedOfferData.earnestMoney?.value || 0,
                     downPayment: extractedOfferData.downPayment?.value || 0,
-                    financingStrategy: extractedOfferData.financing?.value || 'Conventional',
+                    financing: (extractedOfferData.financing?.value || 'Conventional') as any,
                     closingDate: extractedOfferData.closingDate?.value || '',
-                    inspectionPeriod: extractedOfferData.inspectionPeriod?.value ? String(extractedOfferData.inspectionPeriod.value) : '10',
+                    inspectionPeriod: extractedOfferData.inspectionPeriod?.value ? parseInt(String(extractedOfferData.inspectionPeriod.value)) : 10,
                     contingencies: extractedOfferData.contingencies?.value || [],
                     status: 'Offer Sent',
-                    date: new Date().toISOString(),
+                    createdAt: new Date().toISOString(),
                     assignedTo: currentUser.id,
                     aiSummary: '',
                     metadata: extractedOfferData._metadata // Save audit trail

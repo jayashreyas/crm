@@ -78,6 +78,7 @@ export interface Offer {
   assignedTo: string;
   createdAt: string;
   aiSummary?: string;
+  metadata?: any;
 }
 
 export type TaskStatus = 'Pending' | 'Done';
