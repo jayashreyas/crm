@@ -611,9 +611,9 @@ const App: React.FC = () => {
     }
   };
 
-  const handleDeleteContacts = (ids: string[]) => {
-    db.deleteContacts(ids);
-    loadData(currentUser!);
+  const handleDeleteContacts = async (ids: string[]) => {
+    await db.deleteContacts(ids);
+    await loadData(currentUser!);
   };
 
   const renderView = () => {
