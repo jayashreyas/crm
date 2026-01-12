@@ -587,8 +587,17 @@ const App: React.FC = () => {
           onImport={() => handleOpenImport('listings')}
           onAddListing={() => setIsCreateListingModalOpen(true)}
           onDelete={async (ids) => {
-            await db.deleteListings(ids);
-            await loadData(currentUser);
+            try {
+              await db.deleteListings(ids);
+              await loadData(currentUser);
+            } catch (err: any) {
+              console.error("Pipeline delete error:", err);
+              if (err.code === '23503') { // Foreign Key Violation
+                alert("Cannot delete some listings because they are linked to active Offers or Tasks. Please delete the related items first.");
+              } else {
+                alert("Failed to delete listings. See console for details.");
+              }
+            }
           }}
         />;
       case 'offers':
