@@ -252,7 +252,6 @@ class DBService {
   async saveOffer(offer: Offer, userId: string): Promise<void> {
     const row = {
       id: offer.id,
-      agency_id: offer.agencyId,
       listing_id: offer.listingId || null, // Convert empty string to null for UUID field
       buyer_name: offer.buyerName,
       amount: offer.price,
