@@ -927,15 +927,28 @@ const App: React.FC = () => {
               </div>
 
               <form onSubmit={handleSaveManualListing} className="p-10 space-y-6">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">Property Address</label>
-                  <input
-                    required
-                    className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
-                    value={newListing.address}
-                    onChange={e => setNewListing({ ...newListing, address: e.target.value })}
-                    placeholder="e.g. 123 Skyline Blvd"
-                  />
+                <div className="space-y-4">
+                  <div className="flex gap-2 items-end">
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 block">Full Site Address</label>
+                      <input
+                        required
+                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-indigo-100 outline-none font-bold text-sm"
+                        value={newListing.address}
+                        onChange={e => setNewListing({ ...newListing, address: e.target.value })}
+                        placeholder="123 Example Blvd, City, State"
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleAutoFill}
+                      disabled={isLookingUp || !newListing.address}
+                      className="h-[58px] px-6 bg-indigo-50 text-indigo-600 rounded-2xl font-black uppercase tracking-widest text-[10px] hover:bg-indigo-100 transition-all flex items-center gap-2 disabled:opacity-50"
+                    >
+                      {isLookingUp ? <Loader className="animate-spin w-4 h-4" /> : <Search className="w-4 h-4" />}
+                      {isLookingUp ? 'Scanning...' : 'Auto-Fill'}
+                    </button>
+                  </div>
                 </div>
 
                 <div className="space-y-1">
