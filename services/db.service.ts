@@ -66,24 +66,25 @@ class DBService {
   }
 
   private mapToOffer(row: any): Offer {
+    const meta = row.metadata || {};
     return {
       id: row.id,
       listingId: row.listing_id,
       buyerName: row.buyer_name,
       amount: row.amount,
       status: row.status as OfferStatus,
-      // date: row.date, // Removed as it's not in Offer type
-      // Map other fields as needed if they exist in DB
-      agencyId: 'admin', // default for now
-      price: row.amount, // alias
-      downPayment: 0,
-      earnestMoney: 0,
-      financing: 'Cash',
-      inspectionPeriod: 0,
-      contingencies: [],
-      closingDate: '',
-      assignedTo: '',
-      createdAt: row.created_at
+      // Core fields from DB, fallback to metadata for extended fields
+      agencyId: 'admin',
+      price: row.amount,
+      downPayment: meta.downPayment || 0,
+      earnestMoney: meta.earnestMoney || 0,
+      financing: meta.financing || 'Cash',
+      inspectionPeriod: meta.inspectionPeriod || 0,
+      contingencies: meta.contingencies || [],
+      closingDate: meta.closingDate || '',
+      assignedTo: meta.assignedTo || '',
+      createdAt: row.created_at,
+      metadata: meta
     } as Offer;
   }
 
@@ -250,21 +251,26 @@ class DBService {
   }
 
   async saveOffer(offer: Offer, userId: string): Promise<void> {
+    // We store extended fields in metadata to avoid schema mismatches if columns are missing
+    const metadata = {
+      ...(offer.metadata || {}),
+      earnestMoney: offer.earnestMoney,
+      downPayment: offer.downPayment,
+      financing: offer.financing,
+      inspectionPeriod: offer.inspectionPeriod,
+      contingencies: offer.contingencies,
+      closingDate: offer.closingDate,
+      assignedTo: offer.assignedTo,
+    };
+
     const row = {
       id: offer.id,
-      listing_id: offer.listingId || null, // Convert empty string to null for UUID field
+      listing_id: offer.listingId || null,
       buyer_name: offer.buyerName,
       amount: offer.price,
-      earnest_money: offer.earnestMoney,
-      down_payment: offer.downPayment,
-      financing: offer.financing,
-      inspection_period: offer.inspectionPeriod,
-      contingencies: offer.contingencies,
-      closing_date: offer.closingDate,
       status: offer.status,
-      // assigned_to: offer.assignedTo, // Removed as column missing in DB
       created_at: offer.createdAt,
-      metadata: offer.metadata || {}
+      metadata: metadata
     };
     const { error } = await supabase.from('offers').upsert(row);
     if (error) {
