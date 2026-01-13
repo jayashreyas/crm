@@ -1,4 +1,4 @@
-import { Contact, Listing, Task, User, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus, AIScore } from '../types';
+import { Contact, Listing, Task, User, Offer, Thread, Activity, Notification, ListingStatus, OfferStatus } from '../types';
 import { supabase } from './supabaseClient';
 
 class DBService {
@@ -253,9 +253,7 @@ class DBService {
     await supabase.from('listings').update({ status }).eq('id', id);
   }
 
-  async updateListingScore(id: string, score: AIScore): Promise<void> {
-    // Need metadata or score column
-  }
+
 
   // OFFERS
   async getOffers(agencyId: string, role: string, userId: string): Promise<Offer[]> {
@@ -300,6 +298,18 @@ class DBService {
 
   async updateOfferSummary(id: string, summary: string): Promise<void> {
     // no-op for now
+  }
+
+  async deleteOffers(ids: string[]): Promise<void> {
+    const BATCH_SIZE = 20;
+    for (let i = 0; i < ids.length; i += BATCH_SIZE) {
+      const batch = ids.slice(i, i + BATCH_SIZE);
+      const { error } = await supabase.from('offers').delete().in('id', batch);
+      if (error) {
+        console.error("Error deleting offers batch:", error);
+        throw error;
+      }
+    }
   }
 
   // TASKS

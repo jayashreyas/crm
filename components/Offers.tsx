@@ -13,7 +13,8 @@ import {
   X,
   Save,
   Layers,
-  ListChecks
+  ListChecks,
+  Trash2
 
 } from 'lucide-react';
 
@@ -28,17 +29,44 @@ interface OffersProps {
   onImport: () => void;
   onRefresh: () => void;
   onAddOffer: () => void;
-
+  onDelete: (ids: string[]) => void;
 }
 
-export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer }) => {
+export const Offers: React.FC<OffersProps> = ({ offers, listings, users, currentUser, onUpdateStatus, onImport, onRefresh, onAddOffer, onDelete }) => {
 
   const [selectedOffer, setSelectedOffer] = useState<Offer | null>(null);
 
   // Form state for editing
   const [editForm, setEditForm] = useState<Partial<Offer>>({});
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
 
   const stages: OfferStatus[] = ['Draft', 'Offer Sent', 'In Talks', 'Offer Accepted', 'Offer Declined'];
+
+  const toggleSelection = (id: string) => {
+    const newSet = new Set(selectedIds);
+    if (newSet.has(id)) {
+      newSet.delete(id);
+    } else {
+      newSet.add(id);
+    }
+    setSelectedIds(newSet);
+  };
+
+  const selectAll = () => {
+    if (selectedIds.size === offers.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(offers.map(o => o.id)));
+    }
+  };
+
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (confirm(`Are you sure you want to delete ${selectedIds.size} offers? This cannot be undone.`)) {
+      onDelete(Array.from(selectedIds));
+      setSelectedIds(new Set());
+    }
+  };
 
   useEffect(() => {
     if (selectedOffer) {
@@ -97,6 +125,18 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {selectedIds.size > 0 && (
+            <button
+              onClick={handleBulkDelete}
+              className="px-4 py-2 bg-rose-50 text-rose-600 border border-rose-100 font-bold rounded-2xl hover:bg-rose-100 transition-all text-xs flex items-center gap-2 animate-in fade-in slide-in-from-top-2"
+            >
+              <Trash2 className="w-4 h-4" />
+              Delete Selected ({selectedIds.size})
+            </button>
+          )}
+          <button type="button" onClick={selectAll} className="px-4 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs">
+            {selectedIds.size === offers.length && offers.length > 0 ? 'Deselect All' : 'Select All'}
+          </button>
           <button type="button" onClick={onImport} className="px-6 py-2.5 border border-slate-200 bg-white text-slate-700 font-bold rounded-2xl hover:bg-slate-50 transition-all text-xs">Import Negotiations</button>
 
           <button type="button" onClick={onAddOffer} className="flex items-center gap-2 px-8 py-3 bg-indigo-600 text-white font-black rounded-2xl hover:bg-indigo-700 shadow-xl shadow-indigo-100 transition-all text-xs uppercase tracking-widest">
@@ -132,9 +172,14 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
                       }`}
                   >
                     <div className="flex items-start justify-between mb-3">
-                      <div>
-                        <p className="font-extrabold text-slate-800 text-sm leading-tight group-hover:text-indigo-700 transition-colors line-clamp-1">{offer.buyerName}</p>
-                        <p className="text-[10px] text-slate-400 font-bold mt-0.5">#{offer.id.slice(0, 6)}</p>
+                      <div className="flex items-start gap-3">
+                        <div onClick={(e) => { e.stopPropagation(); toggleSelection(offer.id); }} className={`w-5 h-5 rounded-lg border-2 flex items-center justify-center transition-colors cursor-pointer ${selectedIds.has(offer.id) ? 'bg-indigo-600 border-indigo-600' : 'border-slate-200 hover:border-indigo-400'}`}>
+                          {selectedIds.has(offer.id) && <UserCheck className="w-3 h-3 text-white" />}
+                        </div>
+                        <div>
+                          <p className="font-extrabold text-slate-800 text-sm leading-tight group-hover:text-indigo-700 transition-colors line-clamp-1">{offer.buyerName}</p>
+                          <p className="text-[10px] text-slate-400 font-bold mt-0.5">#{offer.id.slice(0, 6)}</p>
+                        </div>
                       </div>
                       <button className="text-slate-300 hover:text-indigo-600 transition-colors"><MoreHorizontal className="w-4 h-4" /></button>
                     </div>
