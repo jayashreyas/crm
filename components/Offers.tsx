@@ -62,6 +62,7 @@ export const Offers: React.FC<OffersProps> = ({ offers, listings, users, current
 
   const handleBulkDelete = () => {
     if (selectedIds.size === 0) return;
+
     if (confirm(`Are you sure you want to delete ${selectedIds.size} offers? This cannot be undone.`)) {
       onDelete(Array.from(selectedIds));
       setSelectedIds(new Set());

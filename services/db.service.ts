@@ -302,13 +302,17 @@ class DBService {
 
   async deleteOffers(ids: string[]): Promise<void> {
     const BATCH_SIZE = 20;
+    console.log(`[DB] Attempting to delete ${ids.length} offers:`, ids);
+
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
       const batch = ids.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase.from('offers').delete().in('id', batch);
+      const { error, count } = await supabase.from('offers').delete({ count: 'exact' }).in('id', batch);
+
       if (error) {
         console.error("Error deleting offers batch:", error);
         throw error;
       }
+      console.log(`[DB] Successfully deleted batch. Rows affected:`, count);
     }
   }
 
