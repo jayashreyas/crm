@@ -390,6 +390,17 @@ const App: React.FC = () => {
     }
   };
 
+  const handleDeleteOffers = async (ids: string[]) => {
+    if (!currentUser) return;
+    try {
+      await db.deleteOffers(ids);
+      await loadData(currentUser);
+    } catch (err: any) {
+      console.error("Failed to delete offers:", err);
+      alert("Failed to delete offers. See console for details.");
+    }
+  };
+
   const handleOpenImport = (type: ImportType) => {
     setImportType(type);
     setIsImportModalOpen(true);
@@ -653,18 +664,7 @@ const App: React.FC = () => {
             }
           }}
         />;
-        const handleDeleteOffers = async (ids: string[]) => {
-          if (!currentUser) return;
-          try {
-            await db.deleteOffers(ids);
-            await loadData(currentUser);
-          } catch (err: any) {
-            console.error("Failed to delete offers:", err);
-            alert("Failed to delete offers. See console for details.");
-          }
-        };
 
-      // ... (renderView logic)
 
       case 'offers':
         return <Offers
